@@ -38,6 +38,9 @@ yarn-error.*
 
 app-example
 
+# Claude / AI tool local files
+.claude/
+
 # generated native folders
 /ios
 /android
