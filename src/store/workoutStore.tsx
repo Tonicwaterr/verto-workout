@@ -6,6 +6,8 @@ import {
   useState,
 } from "react";
 
+import { ActivityIndicator, StyleSheet, View } from "react-native";
+
 import { clearAppState, loadAppState, saveAppState } from "../services/storage";
 
 import {
@@ -56,17 +58,29 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
   const [hasLoadedStorage, setHasLoadedStorage] = useState(false);
 
   useEffect(() => {
-    async function loadSavedState() {
-      const savedState = await loadAppState();
+    let isMounted = true;
 
-      if (savedState) {
-        setAppState(savedState);
+    async function hydrateAppState() {
+      try {
+        const savedState = await loadAppState();
+
+        if (savedState && isMounted) {
+          setAppState(savedState);
+        }
+      } catch (error) {
+        console.error("Failed to load saved app state:", error);
+      } finally {
+        if (isMounted) {
+          setHasLoadedStorage(true);
+        }
       }
-
-      setHasLoadedStorage(true);
     }
 
-    loadSavedState();
+    hydrateAppState();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -257,6 +271,8 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
       const plannedFinalSet = workout.plan[4] ?? 0;
       const actualFinalSet = workout.resultValue;
       const movement = getMovement(plannedFinalSet, actualFinalSet);
+      const isBulgarianExercise =
+        selectedExercise === "Bulgarian Squats";
 
       const nextProgressStage = Math.max(
         0,
@@ -269,7 +285,9 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
       const historyItem = {
         date: new Date().toLocaleDateString("sv-SE"),
         exercise: selectedExercise,
-        subtitle: `Planned ${plannedFinalSet}, completed ${actualFinalSet}`,
+        subtitle: isBulgarianExercise
+          ? `Planned ${plannedFinalSet} per leg, completed ${actualFinalSet} per leg`
+          : `Planned ${plannedFinalSet}, completed ${actualFinalSet}`,
         label: historyLabel,
         movement,
       };
@@ -355,7 +373,11 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
   }
 
   if (!hasLoadedStorage) {
-    return null;
+    return (
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
   }
 
   function toggleBeep() {
@@ -427,3 +449,12 @@ export function useWorkoutStore() {
 
   return context;
 }
+
+const styles = StyleSheet.create({
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: "#0f172a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

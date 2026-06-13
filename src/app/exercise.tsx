@@ -13,8 +13,8 @@ import {
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
-import { EXERCISES } from "../data/exercises";
 import { EXERCISE_IMAGES } from "../data/exerciseImages";
+import { EXERCISES } from "../data/exercises";
 import { useWorkoutStore } from "../store/workoutStore";
 import {
   DEFAULT_REPS_REST,
@@ -46,7 +46,9 @@ export default function ExerciseScreen() {
   const isRepsExercise =
     exercise.mode === "reps" || exercise.mode === "bulgarian";
 
-  const isCustomTimer = exercise.mode === "custom_timer";
+  const isBulgarianExercise = exercise.mode === "bulgarian";
+  
+    const isCustomTimer = exercise.mode === "custom_timer";
 
   const previewPlan = useMemo(() => {
     if (!isRepsSettings(settings)) {
@@ -144,7 +146,9 @@ export default function ExerciseScreen() {
           {isRepsExercise ? (
             <>
               <View style={styles.field}>
-                <Text style={styles.label}>Max reps test</Text>
+                <Text style={styles.label}>
+                  {isBulgarianExercise ? "Maximum reps per leg" : "Maximum reps"}
+                </Text>
                 <TextInput
                   value={maxRepsValue}
                   onChangeText={(value) =>

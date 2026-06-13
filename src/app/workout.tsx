@@ -8,8 +8,8 @@ import {
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
-import { EXERCISES } from "../data/exercises";
 import { EXERCISE_IMAGES } from "../data/exerciseImages";
+import { EXERCISES } from "../data/exercises";
 import { useWorkoutStore } from "../store/workoutStore";
 import { getPassNote } from "../utils/workoutLogic";
 
@@ -23,6 +23,7 @@ export default function WorkoutScreen() {
 
   const exercise = EXERCISES.find((item) => item.key === selectedExercise);
   const isTimedWorkout = workout.workoutMode === "timed";
+  const isBulgarianExercise = exercise?.mode === "bulgarian";
 
   function getTimedNote() {
     if (selectedExercise === "Plank") {
@@ -83,11 +84,31 @@ export default function WorkoutScreen() {
                 <Text style={styles.exerciseIcon}>•</Text>
               )}
 
-            <Text style={styles.reps}>{currentValue}</Text>
+            {isBulgarianExercise ? (
+              <View style={styles.bulgarianBlock}>
+                <View style={styles.legRow}>
+                  <Text style={styles.legLabel}>LEFT LEG</Text>
+                  <Text style={styles.legValue}>{currentValue}</Text>
+                </View>
 
-            <Text style={styles.label}>
-              {isTimedWorkout ? "seconds" : "reps"}
-            </Text>
+                <View style={styles.legDivider} />
+
+                <View style={styles.legRow}>
+                  <Text style={styles.legLabel}>RIGHT LEG</Text>
+                  <Text style={styles.legValue}>{currentValue}</Text>
+                </View>
+
+                <Text style={styles.label}>reps per leg</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.reps}>{currentValue}</Text>
+
+                <Text style={styles.label}>
+                  {isTimedWorkout ? "seconds" : "reps"}
+                </Text>
+              </>
+            )}
 
             <Text style={styles.note}>
               {isTimedWorkout ? getTimedNote() : getPassNote(currentPass)}
@@ -161,6 +182,34 @@ const styles = StyleSheet.create({
     fontSize: 120,
     lineHeight: 128,
     fontWeight: "900",
+  },
+  bulgarianBlock: {
+    width: "100%",
+    alignItems: "center",
+    marginBottom: 10,
+    gap: 8,
+  },
+  legRow: {
+    width: "82%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  legLabel: {
+    color: "#94a3b8",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  legValue: {
+    color: "#f8fafc",
+    fontSize: 54,
+    lineHeight: 60,
+    fontWeight: "900",
+  },
+  legDivider: {
+    width: "82%",
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
   label: {
     color: "#94a3b8",

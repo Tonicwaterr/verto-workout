@@ -22,6 +22,9 @@ export default function ResultScreen() {
   const plannedFinalSet = workout.plan[4] ?? 0;
   const actualFinalSet = workout.resultValue;
 
+  const isBulgarianExercise =
+    selectedExercise === "Bulgarian Squats";
+
   const movement = getMovement(plannedFinalSet, actualFinalSet);
 
   function getFeedbackText() {
@@ -64,7 +67,9 @@ export default function ResultScreen() {
 
               <View style={styles.resultBox}>
                 <Text style={styles.resultValue}>{actualFinalSet}</Text>
-                <Text style={styles.resultLabel}>reps</Text>
+                <Text style={styles.resultLabel}>
+                  {isBulgarianExercise ? "reps per leg" : "reps"}
+                </Text>
               </View>
 
               <Pressable style={styles.adjustButton} onPress={handlePlus}>
