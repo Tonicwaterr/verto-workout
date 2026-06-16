@@ -14,8 +14,12 @@ import { useWorkoutStore } from "../store/workoutStore";
 import { getPassNote } from "../utils/workoutLogic";
 
 export default function WorkoutScreen() {
-  const { appState, selectedExercise, goToNextPass, abortWorkout } =
-    useWorkoutStore();
+  const {
+    appState,
+    selectedExercise,
+    startRestTimer,
+    abortWorkout,
+  } = useWorkoutStore();
 
   const workout = appState.workout;
   const currentPass = workout.currentPass;
@@ -52,7 +56,8 @@ export default function WorkoutScreen() {
       return;
     }
 
-    goToNextPass();
+    startRestTimer();
+    router.push("/rest");
   }
 
   function handleAbort() {

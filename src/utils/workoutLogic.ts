@@ -1,8 +1,10 @@
 import {
   AppState,
+  DifficultyLevel,
   ExerciseSettings,
   RepsExerciseSettings,
 } from "../types/workout";
+
 import { EXERCISES } from "../data/exercises";
 
 export const DEFAULT_REPS_REST = 90;
@@ -11,19 +13,43 @@ export const DEFAULT_TIMED_REST = 20;
 
 export const BASE_PERCENTS = [40, 60, 50, 50, 60];
 
-export const LEVEL_ADJUSTMENTS: Record<number, number> = {
+export const DIFFICULTY_OPTIONS: {
+  value: DifficultyLevel;
+  label: string;
+}[] = [
+  {
+    value: 1,
+    label: "Light",
+  },
+  {
+    value: 3,
+    label: "Moderate",
+  },
+  {
+    value: 5,
+    label: "Heavy",
+  },
+];
+
+export const LEVEL_ADJUSTMENTS: Record<DifficultyLevel, number> = {
   1: -10,
-  2: -5,
   3: 0,
-  4: 5,
   5: 10,
 };
 
-export const PROGRESSION_MAP: Record<number, number[][]> = {
-  1: [[4], [3, 4], [2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4, 5]],
-  2: [[3, 4], [2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4, 5]],
-  3: [[3, 4, 5], [2, 3, 4, 5], [1, 2, 3, 4, 5]],
-  4: [[2, 3, 4, 5], [1, 2, 3, 4, 5]],
+export const PROGRESSION_MAP: Record<DifficultyLevel, number[][]> = {
+  1: [
+    [4],
+    [3, 4],
+    [2, 3, 4],
+    [1, 2, 3, 4],
+    [1, 2, 3, 4, 5],
+  ],
+  3: [
+    [3, 4, 5],
+    [2, 3, 4, 5],
+    [1, 2, 3, 4, 5],
+  ],
   5: [[1, 2, 3, 4, 5]],
 };
 
@@ -58,14 +84,21 @@ export function buildInitialSettings(): AppState["settings"] {
   return settings;
 }
 
-export function buildInitialSettingsForExercise(exerciseKey: string) {
-  const exercise = EXERCISES.find((item) => item.key === exerciseKey);
+export function buildInitialSettingsForExercise(
+  exerciseKey: string
+): ExerciseSettings | null {
+  const exercise = EXERCISES.find(
+    (item) => item.key === exerciseKey
+  );
 
   if (!exercise) {
     return null;
   }
 
-  if (exercise.mode === "reps" || exercise.mode === "bulgarian") {
+  if (
+    exercise.mode === "reps" ||
+    exercise.mode === "bulgarian"
+  ) {
     return {
       maxReps: "",
       level: 3,
@@ -124,12 +157,31 @@ export function isRepsSettings(
   return "maxReps" in settings;
 }
 
+export function normalizeDifficultyLevel(
+  level: number
+): DifficultyLevel {
+  if (level <= 2) {
+    return 1;
+  }
+
+  if (level >= 4) {
+    return 5;
+  }
+
+  return 3;
+}
+
 export function getBasePlan(maxReps: number, level: number): number[] {
-  const adjustment = LEVEL_ADJUSTMENTS[level] ?? 0;
+  const normalizedLevel = normalizeDifficultyLevel(level);
+  const adjustment = LEVEL_ADJUSTMENTS[normalizedLevel];
 
   return BASE_PERCENTS.map((percent) => {
     const adjustedPercent = percent + adjustment;
-    return Math.max(1, Math.round((maxReps * adjustedPercent) / 100));
+
+    return Math.max(
+      1,
+      Math.round((maxReps * adjustedPercent) / 100)
+    );
   });
 }
 
@@ -138,8 +190,10 @@ export function buildPlan(
   level: number,
   progressStage: number
 ): number[] {
-  const plan = getBasePlan(maxReps, level);
-  const progressionStages = PROGRESSION_MAP[level] ?? [];
+  const normalizedLevel = normalizeDifficultyLevel(level);
+  const plan = getBasePlan(maxReps, normalizedLevel);
+  const progressionStages =
+    PROGRESSION_MAP[normalizedLevel];
   const stagesToApply = Math.min(progressStage, progressionStages.length);
 
   for (let i = 0; i < stagesToApply; i++) {

@@ -20,8 +20,10 @@ import {
   DEFAULT_REPS_REST,
   DEFAULT_TIMED_REST,
   DEFAULT_TIMED_WORK,
+  DIFFICULTY_OPTIONS,
   buildPlan,
   isRepsSettings,
+  normalizeDifficultyLevel,
 } from "../utils/workoutLogic";
 
 export default function ExerciseScreen() {
@@ -61,11 +63,19 @@ export default function ExerciseScreen() {
       return [0, 0, 0, 0, 0];
     }
 
-    return buildPlan(parsedMaxReps, settings.level, settings.progressStage);
+    const normalizedLevel = normalizeDifficultyLevel(settings.level);
+
+    return buildPlan(
+      parsedMaxReps,
+      normalizedLevel,
+      settings.progressStage
+    );
   }, [settings]);
 
   const maxRepsValue = isRepsSettings(settings) ? settings.maxReps : "";
-  const levelValue = isRepsSettings(settings) ? settings.level : 3;
+  const levelValue = isRepsSettings(settings)
+    ? normalizeDifficultyLevel(settings.level)
+    : 3;
 
   const restTimeValue = "restTime" in settings ? settings.restTime : "";
   const workTimeValue = "workTime" in settings ? settings.workTime : "";
@@ -79,8 +89,21 @@ export default function ExerciseScreen() {
         return;
       }
 
-      const parsedRestTime = Number(settings.restTime) || DEFAULT_REPS_REST;
-      const plan = buildPlan(parsedMaxReps, settings.level, settings.progressStage);
+      const parsedRestTime =
+        Number(settings.restTime) || DEFAULT_REPS_REST;
+
+      const normalizedLevel =
+        normalizeDifficultyLevel(settings.level);
+
+      const plan = buildPlan(
+        parsedMaxReps,
+        normalizedLevel,
+        settings.progressStage
+      );
+
+      updateCurrentSettings({
+        level: normalizedLevel,
+      });
 
       startRepsWorkout(plan, parsedRestTime);
       router.push("/workout");
@@ -181,25 +204,33 @@ export default function ExerciseScreen() {
                 <Text style={styles.label}>Difficulty</Text>
 
                 <View style={styles.levelRow}>
-                  {[1, 2, 3, 4, 5].map((item) => (
-                    <Pressable
-                      key={item}
-                      style={[
-                        styles.levelButton,
-                        levelValue === item && styles.levelButtonSelected,
-                      ]}
-                      onPress={() => updateCurrentSettings({ level: item })}
-                    >
-                      <Text
+                  {DIFFICULTY_OPTIONS.map((option) => {
+                    const isSelected = levelValue === option.value;
+
+                    return (
+                      <Pressable
+                        key={option.value}
                         style={[
-                          styles.levelButtonText,
-                          levelValue === item && styles.levelButtonTextSelected,
+                          styles.levelButton,
+                          isSelected && styles.levelButtonSelected,
                         ]}
+                        onPress={() =>
+                          updateCurrentSettings({
+                            level: option.value,
+                          })
+                        }
                       >
-                        {item}
-                      </Text>
-                    </Pressable>
-                  ))}
+                        <Text
+                          style={[
+                            styles.levelButtonText,
+                            isSelected && styles.levelButtonTextSelected,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>                        
+                      </Pressable>
+                    );
+                  })}
                 </View>
               </View>
 
@@ -345,25 +376,27 @@ const styles = StyleSheet.create({
   },
   levelButton: {
     flex: 1,
-    minHeight: 48,
+    minHeight: 64,
     borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 8,
   },
   levelButtonSelected: {
-    backgroundColor: "#22d3ee",
+    backgroundColor: "rgba(34,211,238,0.16)",
     borderColor: "#22d3ee",
   },
   levelButtonText: {
-    color: "#f8fafc",
-    fontSize: 16,
+    color: "#cbd5e1",
+    fontSize: 15,
     fontWeight: "800",
   },
   levelButtonTextSelected: {
-    color: "#082f49",
+    color: "#22d3ee",
   },
   previewBox: {
     borderRadius: 18,

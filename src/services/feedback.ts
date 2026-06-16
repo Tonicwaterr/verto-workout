@@ -1,5 +1,5 @@
-import * as Haptics from "expo-haptics";
 import { createAudioPlayer } from "expo-audio";
+import * as Haptics from "expo-haptics";
 
 import { GlobalSettings } from "../types/workout";
 

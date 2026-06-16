@@ -19,7 +19,11 @@ const ONBOARDING_STEPS = [
   {
     title: "Difficulty",
     text: "Difficulty controls how hard the workout feels. You can change it anytime.",
-    example: "Level 1 = easier · Level 3 = normal · Level 5 = harder",
+    example: `Light – Lower starting volume
+
+Moderate – Balanced workout
+
+Heavy – Higher starting volume`,
   },
   {
     title: "Progress System",

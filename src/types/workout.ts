@@ -13,6 +13,8 @@ export type Exercise = {
   fallback: string;
 };
 
+export type DifficultyLevel = 1 | 3 | 5;
+
 export type WorkoutHistoryItem = {
   date: string;
   exercise: string;
@@ -23,7 +25,7 @@ export type WorkoutHistoryItem = {
 
 export type RepsExerciseSettings = {
   maxReps: string;
-  level: number;
+  level: DifficultyLevel;
   restTime: string;
   history: WorkoutHistoryItem[];
   progressStage: number;
