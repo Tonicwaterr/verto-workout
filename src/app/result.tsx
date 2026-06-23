@@ -8,12 +8,17 @@ import {
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useWorkoutStore } from "../store/workoutStore";
-import { getMovement } from "../utils/workoutLogic";
+import {
+  calculateProgressionUpdate,
+  getMovement,
+  isRepsSettings,
+} from "../utils/workoutLogic";
 
 export default function ResultScreen() {
   const {
     appState,
     selectedExercise,
+    getCurrentSettings,
     setResultValue,
     saveRepsWorkoutResult,
   } = useWorkoutStore();
@@ -27,16 +32,50 @@ export default function ResultScreen() {
 
   const movement = getMovement(plannedFinalSet, actualFinalSet);
 
+  const currentSettings = getCurrentSettings();
+
+  const currentEstimatedMax =
+    isRepsSettings(currentSettings)
+      ? Math.max(
+          1,
+          Math.round(Number(currentSettings.maxReps) || 1)
+        )
+      : 1;
+
+  const currentProgressPoints =
+    isRepsSettings(currentSettings)
+      ? currentSettings.progressPoints ?? 0
+      : 0;
+
+  const progressionPreview =
+    calculateProgressionUpdate(
+      currentEstimatedMax,
+      currentProgressPoints,
+      movement
+    );
+
   function getFeedbackText() {
+    if (progressionPreview.maxRepsChange > 0) {
+      return isBulgarianExercise
+        ? `Great result. Your estimated max will increase from ${currentEstimatedMax} to ${progressionPreview.nextMaxReps} reps per leg.`
+        : `Great result. Your estimated max will increase from ${currentEstimatedMax} to ${progressionPreview.nextMaxReps} reps.`;
+    }
+
+    if (progressionPreview.maxRepsChange < 0) {
+      return isBulgarianExercise
+        ? `Verto will adjust your estimated max from ${currentEstimatedMax} to ${progressionPreview.nextMaxReps} reps per leg.`
+        : `Verto will adjust your estimated max from ${currentEstimatedMax} to ${progressionPreview.nextMaxReps} reps.`;
+    }
+
     if (movement > 0) {
-      return "Better than planned. Next time can become harder.";
+      return "Better than planned. This moves you closer to a higher estimated max.";
     }
 
     if (movement < 0) {
-      return "Lower than planned. Next time can become easier.";
+      return "Lower than planned. Verto only reduces your estimate after repeated lower results.";
     }
 
-    return "Close to planned. Keep the same level.";
+    return "Close to planned. Your estimated max stays the same.";
   }
 
   function handleMinus() {

@@ -19,8 +19,10 @@ import {
 import {
   buildInitialSettingsForExercise,
   buildInitialState,
+  calculateProgressionUpdate,
   getMovement,
   isRepsSettings,
+  migrateAppState,
 } from "../utils/workoutLogic";
 
 type WorkoutStore = {
@@ -65,7 +67,7 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         const savedState = await loadAppState();
 
         if (savedState && isMounted) {
-          setAppState(savedState);
+          setAppState(migrateAppState(savedState));
         }
       } catch (error) {
         console.error("Failed to load saved app state:", error);
@@ -260,42 +262,92 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
   
   function saveRepsWorkoutResult() {
     setAppState((currentState) => {
-      const selectedExercise = currentState.selectedExercise;
-      const currentSettings = currentState.settings[selectedExercise];
+      const selectedExercise =
+        currentState.selectedExercise;
+
+      const currentSettings =
+        currentState.settings[selectedExercise];
 
       if (!isRepsSettings(currentSettings)) {
         return currentState;
       }
 
       const workout = currentState.workout;
-      const plannedFinalSet = workout.plan[4] ?? 0;
-      const actualFinalSet = workout.resultValue;
-      const movement = getMovement(plannedFinalSet, actualFinalSet);
+
+      const plannedFinalSet =
+        workout.plan[4] ?? 0;
+
+      const actualFinalSet =
+        workout.resultValue;
+
+      const movement = getMovement(
+        plannedFinalSet,
+        actualFinalSet
+      );
+
       const isBulgarianExercise =
         selectedExercise === "Bulgarian Squats";
 
-      const nextProgressStage = Math.max(
-        0,
-        currentSettings.progressStage + movement
+      const currentEstimatedMax = Math.max(
+        1,
+        Math.round(Number(currentSettings.maxReps) || 1)
       );
 
+      const progressionUpdate =
+        calculateProgressionUpdate(
+          currentEstimatedMax,
+          currentSettings.progressPoints ?? 0,
+          movement
+        );
+
+      const {
+        nextMaxReps,
+        nextProgressPoints,
+        maxRepsChange,
+      } = progressionUpdate;
+
       const historyLabel =
-        movement > 0 ? "Improved" : movement < 0 ? "Reduced" : "Unchanged";
+        maxRepsChange > 0
+          ? "Max increased"
+          : maxRepsChange < 0
+            ? "Max reduced"
+            : movement > 0
+              ? "Improved"
+              : movement < 0
+                ? "Reduced"
+                : "Unchanged";
+
+      const performanceText = isBulgarianExercise
+        ? `Planned ${plannedFinalSet} per leg, completed ${actualFinalSet} per leg`
+        : `Planned ${plannedFinalSet}, completed ${actualFinalSet}`;
+
+      const progressionText =
+        maxRepsChange > 0
+          ? isBulgarianExercise
+            ? ` Estimated max increased from ${currentEstimatedMax} to ${nextMaxReps} per leg.`
+            : ` Estimated max increased from ${currentEstimatedMax} to ${nextMaxReps}.`
+          : maxRepsChange < 0
+            ? isBulgarianExercise
+              ? ` Estimated max reduced from ${currentEstimatedMax} to ${nextMaxReps} per leg.`
+              : ` Estimated max reduced from ${currentEstimatedMax} to ${nextMaxReps}.`
+            : "";
 
       const historyItem = {
         date: new Date().toLocaleDateString("sv-SE"),
         exercise: selectedExercise,
-        subtitle: isBulgarianExercise
-          ? `Planned ${plannedFinalSet} per leg, completed ${actualFinalSet} per leg`
-          : `Planned ${plannedFinalSet}, completed ${actualFinalSet}`,
+        subtitle: `${performanceText}.${progressionText}`,
         label: historyLabel,
         movement,
       };
 
       const updatedSettings: RepsExerciseSettings = {
         ...currentSettings,
-        progressStage: nextProgressStage,
-        history: [historyItem, ...currentSettings.history],
+        maxReps: String(nextMaxReps),
+        progressPoints: nextProgressPoints,
+        history: [
+          historyItem,
+          ...currentSettings.history,
+        ],
       };
 
       return {
@@ -309,6 +361,12 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
           active: false,
           currentPass: 1,
           resultValue: 0,
+          lastFeedback:
+            maxRepsChange > 0
+              ? `Estimated max increased to ${nextMaxReps}.`
+              : maxRepsChange < 0
+                ? `Estimated max reduced to ${nextMaxReps}.`
+                : "Estimated max unchanged.",
           plan: [],
         },
       };

@@ -37,21 +37,7 @@ export const LEVEL_ADJUSTMENTS: Record<DifficultyLevel, number> = {
   5: 10,
 };
 
-export const PROGRESSION_MAP: Record<DifficultyLevel, number[][]> = {
-  1: [
-    [4],
-    [3, 4],
-    [2, 3, 4],
-    [1, 2, 3, 4],
-    [1, 2, 3, 4, 5],
-  ],
-  3: [
-    [3, 4, 5],
-    [2, 3, 4, 5],
-    [1, 2, 3, 4, 5],
-  ],
-  5: [[1, 2, 3, 4, 5]],
-};
+export const PROGRESSION_THRESHOLD = 2;
 
 export function buildInitialSettings(): AppState["settings"] {
   const settings: AppState["settings"] = {};
@@ -63,7 +49,7 @@ export function buildInitialSettings(): AppState["settings"] {
         level: 3,
         restTime: "",
         history: [],
-        progressStage: 0,
+        progressPoints: 0,
       };
     } else if (exercise.mode === "custom_timer") {
       settings[exercise.key] = {
@@ -104,7 +90,7 @@ export function buildInitialSettingsForExercise(
       level: 3,
       restTime: "",
       history: [],
-      progressStage: 0,
+      progressPoints: 0,
     };
   }
 
@@ -151,6 +137,72 @@ export function buildInitialState(): AppState {
   };
 }
 
+type LegacyRepsExerciseSettings = Omit<
+  RepsExerciseSettings,
+  "progressPoints"
+> & {
+  progressPoints?: number;
+  progressStage?: number;
+};
+
+export function migrateAppState(
+  savedState: AppState
+): AppState {
+  const defaults = buildInitialState();
+
+  const migratedSettings: AppState["settings"] = {
+    ...defaults.settings,
+  };
+
+  for (const [exerciseKey, settings] of Object.entries(
+    savedState.settings ?? {}
+  )) {
+    if ("maxReps" in settings) {
+      const legacySettings =
+        settings as LegacyRepsExerciseSettings;
+
+      const storedProgressPoints =
+        typeof legacySettings.progressPoints === "number" &&
+        Number.isFinite(legacySettings.progressPoints)
+          ? legacySettings.progressPoints
+          : 0;
+
+      migratedSettings[exerciseKey] = {
+        maxReps: legacySettings.maxReps ?? "",
+        level: normalizeDifficultyLevel(
+          Number(legacySettings.level ?? 3)
+        ),
+        restTime: legacySettings.restTime ?? "",
+        history: Array.isArray(legacySettings.history)
+          ? legacySettings.history
+          : [],
+        progressPoints: Math.max(
+          -2,
+          Math.min(2, Math.trunc(storedProgressPoints))
+        ),
+      };
+
+      continue;
+    }
+
+    migratedSettings[exerciseKey] = settings;
+  }
+
+  return {
+    ...defaults,
+    ...savedState,
+    settings: migratedSettings,
+    globalSettings: {
+      ...defaults.globalSettings,
+      ...savedState.globalSettings,
+    },
+    workout: {
+      ...defaults.workout,
+      ...savedState.workout,
+    },
+  };
+}
+
 export function isRepsSettings(
   settings: ExerciseSettings
 ): settings is RepsExerciseSettings {
@@ -187,30 +239,51 @@ export function getBasePlan(maxReps: number, level: number): number[] {
 
 export function buildPlan(
   maxReps: number,
-  level: number,
-  progressStage: number
+  level: number
 ): number[] {
-  const normalizedLevel = normalizeDifficultyLevel(level);
-  const plan = getBasePlan(maxReps, normalizedLevel);
-  const progressionStages =
-    PROGRESSION_MAP[normalizedLevel];
-  const stagesToApply = Math.min(progressStage, progressionStages.length);
+  return getBasePlan(maxReps, level);
+}
 
-  for (let i = 0; i < stagesToApply; i++) {
-    for (const setNumber of progressionStages[i]) {
-      plan[setNumber - 1] += 1;
-    }
+export type ProgressionUpdate = {
+  nextMaxReps: number;
+  nextProgressPoints: number;
+  maxRepsChange: number;
+};
+
+export function calculateProgressionUpdate(
+  maxReps: number,
+  progressPoints: number,
+  movement: number
+): ProgressionUpdate {
+  let nextMaxReps = Math.max(1, Math.round(maxReps));
+
+  let nextProgressPoints =
+    Math.trunc(progressPoints) + Math.trunc(movement);
+
+  let maxRepsChange = 0;
+
+  while (nextProgressPoints >= PROGRESSION_THRESHOLD) {
+    nextMaxReps += 1;
+    nextProgressPoints -= PROGRESSION_THRESHOLD;
+    maxRepsChange += 1;
   }
 
-  if (progressStage > progressionStages.length) {
-    const extra = progressStage - progressionStages.length;
-
-    for (let i = 0; i < plan.length; i++) {
-      plan[i] += extra;
+  while (nextProgressPoints <= -PROGRESSION_THRESHOLD) {
+    if (nextMaxReps <= 1) {
+      nextProgressPoints = -(PROGRESSION_THRESHOLD - 1);
+      break;
     }
+
+    nextMaxReps -= 1;
+    nextProgressPoints += PROGRESSION_THRESHOLD;
+    maxRepsChange -= 1;
   }
 
-  return plan.map((value) => Math.max(1, value));
+  return {
+    nextMaxReps,
+    nextProgressPoints,
+    maxRepsChange,
+  };
 }
 
 export function getMovement(planned: number, actual: number): number {

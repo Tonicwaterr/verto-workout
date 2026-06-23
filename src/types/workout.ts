@@ -28,7 +28,7 @@ export type RepsExerciseSettings = {
   level: DifficultyLevel;
   restTime: string;
   history: WorkoutHistoryItem[];
-  progressStage: number;
+  progressPoints: number;
 };
 
 export type TimedExerciseSettings = {
