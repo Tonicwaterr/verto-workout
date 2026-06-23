@@ -10,31 +10,85 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useWorkoutStore } from "../store/workoutStore";
 
-const ONBOARDING_STEPS = [
+type OnboardingDetail = {
+  label: string;
+  text: string;
+};
+
+type OnboardingStep = {
+  title: string;
+  text: string;
+  supportingText?: string;
+  details?: OnboardingDetail[];
+  example?: string;
+};
+
+const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     title: "Welcome to Verto Workout",
-    text: "Choose an exercise and enter the maximum number of reps you can do.",
-    example: "Example: Push-ups → max reps = 20",
+    text:
+      "Verto creates structured five-set workouts based on your current ability.",
+    supportingText:
+      "Choose an exercise, set your starting point, and select the intensity that suits you today.",
   },
   {
-    title: "Difficulty",
-    text: "Difficulty controls how hard the workout feels. You can change it anytime.",
-    example: `Light – Lower starting volume
-
-Moderate – Balanced workout
-
-Heavy – Higher starting volume`,
+    title: "Set your starting point",
+    text:
+      "The first time you open an exercise, enter your estimated max and preferred rest time.",
+    details: [
+      {
+        label: "Estimated max",
+        text:
+          "The most clean repetitions you believe you could currently perform in one set.",
+      },
+      {
+        label: "Rest time",
+        text:
+          "How long you want to recover between each set.",
+      },
+    ],
+    example: "Example: 20 reps  •  90 seconds",
   },
   {
-    title: "Progress System",
-    text: "The app builds five sets from your max reps. After the last set, enter how many reps you actually completed.",
-    example:
-      "If you do more than planned, the next workout becomes harder. If you do less, it becomes easier.",
+    title: "Choose today's intensity",
+    text:
+      "Select the session that best matches how your body feels and how you want to train.",
+    details: [
+      {
+        label: "Light",
+        text:
+          "Recovery-focused. Your workout is saved, but progression is paused.",
+      },
+      {
+        label: "Moderate",
+        text:
+          "A balanced workout with progression enabled.",
+      },
+      {
+        label: "Heavy",
+        text:
+          "A more demanding workout with progression enabled.",
+      },
+    ],
   },
   {
-    title: "Ready?",
-    text: "Pick an exercise, adjust the settings if needed, and tap Continue.",
-    example: "You can open History from the home screen.",
+    title: "Train and progress",
+    text:
+      "Complete the five sets and use the automatic rest timer between them.",
+    details: [
+      {
+        label: "After set five",
+        text:
+          "Enter the number of repetitions you actually completed.",
+      },
+      {
+        label: "Over time",
+        text:
+          "Verto adjusts your estimated max based on your Moderate and Heavy workouts.",
+      },
+    ],
+    supportingText:
+      "Your workout history is saved locally on your device.",
   },
 ];
 
@@ -43,53 +97,149 @@ export default function OnboardingScreen() {
   const [stepIndex, setStepIndex] = useState(0);
 
   const currentStep = ONBOARDING_STEPS[stepIndex];
-  const isLastStep = stepIndex === ONBOARDING_STEPS.length - 1;
+  const isFirstStep = stepIndex === 0;
+  const isLastStep =
+    stepIndex === ONBOARDING_STEPS.length - 1;
 
-  function handleNext() {
-    if (!isLastStep) {
-      setStepIndex((current) => current + 1);
-      return;
-    }
-
+  function finishOnboarding() {
     completeOnboarding();
     router.replace("/");
   }
 
-  function handleSkip() {
-    completeOnboarding();
-    router.replace("/");
+  function handleNext() {
+    if (isLastStep) {
+      finishOnboarding();
+      return;
+    }
+
+    setStepIndex((current) => current + 1);
+  }
+
+  function handleBack() {
+    if (isFirstStep) {
+      return;
+    }
+
+    setStepIndex((current) => current - 1);
   }
 
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.container}>
-        <View style={styles.card}>
-          <View>
-            <Text style={styles.stepText}>
-              Step {stepIndex + 1} of {ONBOARDING_STEPS.length}
+        <View style={styles.header}>
+          <Text style={styles.brand}>
+            VERTO{" "}
+            <Text style={styles.brandAccent}>
+              WORKOUT
             </Text>
+          </Text>
 
-            <Text style={styles.title}>{currentStep.title}</Text>
-            <Text style={styles.body}>{currentStep.text}</Text>
+          {!isLastStep && (
+            <Pressable
+              hitSlop={12}
+              onPress={finishOnboarding}
+            >
+              <Text style={styles.skipText}>Skip</Text>
+            </Pressable>
+          )}
+        </View>
 
-            <View style={styles.exampleBox}>
-              <Text style={styles.exampleText}>{currentStep.example}</Text>
-            </View>
+        <View style={styles.progressSection}>
+          <Text style={styles.stepText}>
+            Step {stepIndex + 1} of{" "}
+            {ONBOARDING_STEPS.length}
+          </Text>
+
+          <View style={styles.progressDots}>
+            {ONBOARDING_STEPS.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.progressDot,
+                  index === stepIndex &&
+                    styles.progressDotActive,
+                  index < stepIndex &&
+                    styles.progressDotCompleted,
+                ]}
+              />
+            ))}
           </View>
+        </View>
 
-          <View style={styles.actions}>
-            <Pressable style={styles.nextButton} onPress={handleNext}>
-              <Text style={styles.nextButtonText}>
-                {isLastStep ? "Start training" : "Next"}
+        <View style={styles.content}>
+          <Text style={styles.title}>
+            {currentStep.title}
+          </Text>
+
+          <Text style={styles.body}>
+            {currentStep.text}
+          </Text>
+
+          {currentStep.details && (
+            <View style={styles.detailList}>
+              {currentStep.details.map(
+                (detail, index) => (
+                  <View
+                    key={detail.label}
+                    style={[
+                      styles.detailRow,
+                      index <
+                        currentStep.details!.length - 1 &&
+                        styles.detailRowBorder,
+                    ]}
+                  >
+                    <View style={styles.detailMarker} />
+
+                    <View style={styles.detailText}>
+                      <Text style={styles.detailLabel}>
+                        {detail.label}
+                      </Text>
+
+                      <Text style={styles.detailDescription}>
+                        {detail.text}
+                      </Text>
+                    </View>
+                  </View>
+                )
+              )}
+            </View>
+          )}
+
+          {currentStep.example && (
+            <Text style={styles.exampleText}>
+              {currentStep.example}
+            </Text>
+          )}
+
+          {currentStep.supportingText && (
+            <Text style={styles.supportingText}>
+              {currentStep.supportingText}
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.actions}>
+          {!isFirstStep && (
+            <Pressable
+              style={styles.backButton}
+              onPress={handleBack}
+            >
+              <Text style={styles.backButtonText}>
+                Back
               </Text>
             </Pressable>
+          )}
 
-            {!isLastStep && (
-              <Pressable style={styles.skipButton} onPress={handleSkip}>
-                <Text style={styles.skipButtonText}>Skip</Text>
-              </Pressable>
-            )}
-          </View>
+          <Pressable
+            style={styles.nextButton}
+            onPress={handleNext}
+          >
+            <Text style={styles.nextButtonText}>
+              {isLastStep
+                ? "Start training"
+                : "Continue"}
+            </Text>
+          </Pressable>
         </View>
       </View>
     </SafeAreaView>
@@ -101,79 +251,181 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0f172a",
   },
+
   container: {
     flex: 1,
-    padding: 18,
-    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingTop: 14,
+    paddingBottom: 18,
   },
-  card: {
-    minHeight: 430,
-    borderRadius: 24,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    padding: 22,
+
+  header: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
   },
-  stepText: {
-    color: "#22d3ee",
-    fontSize: 14,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-  title: {
-    color: "#f8fafc",
-    fontSize: 28,
-    fontWeight: "900",
-    marginBottom: 12,
-  },
-  body: {
-    color: "#94a3b8",
-    fontSize: 17,
-    lineHeight: 24,
-    marginBottom: 18,
-  },
-  exampleBox: {
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    padding: 14,
-  },
-  exampleText: {
+
+  brand: {
     color: "#f8fafc",
     fontSize: 16,
-    lineHeight: 23,
+    fontWeight: "900",
+    letterSpacing: 0.6,
   },
+
+  brandAccent: {
+    color: "#22d3ee",
+  },
+
+  skipText: {
+    color: "#94a3b8",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+
+  progressSection: {
+    marginTop: 22,
+  },
+
+  stepText: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+
+  progressDots: {
+    flexDirection: "row",
+    gap: 7,
+  },
+
+  progressDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+
+  progressDotActive: {
+    width: 28,
+    backgroundColor: "#22d3ee",
+  },
+
+  progressDotCompleted: {
+    backgroundColor: "rgba(34,211,238,0.45)",
+  },
+
+  content: {
+    flex: 1,
+    justifyContent: "center",
+    paddingVertical: 24,
+  },
+
+  title: {
+    color: "#f8fafc",
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: "900",
+    letterSpacing: -0.6,
+    marginBottom: 16,
+  },
+
+  body: {
+    color: "#cbd5e1",
+    fontSize: 18,
+    lineHeight: 27,
+  },
+
+  detailList: {
+    marginTop: 28,
+  },
+
+  detailRow: {
+    flexDirection: "row",
+    paddingVertical: 16,
+  },
+
+  detailRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.09)",
+  },
+
+  detailMarker: {
+    width: 4,
+    minHeight: 42,
+    borderRadius: 999,
+    backgroundColor: "#22d3ee",
+    marginRight: 14,
+  },
+
+  detailText: {
+    flex: 1,
+  },
+
+  detailLabel: {
+    color: "#f8fafc",
+    fontSize: 17,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+
+  detailDescription: {
+    color: "#94a3b8",
+    fontSize: 15,
+    lineHeight: 22,
+  },
+
+  exampleText: {
+    color: "#22d3ee",
+    fontSize: 16,
+    fontWeight: "800",
+    marginTop: 22,
+  },
+
+  supportingText: {
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 22,
+  },
+
   actions: {
+    flexDirection: "row",
     gap: 10,
   },
+
+  backButton: {
+    minWidth: 92,
+    minHeight: 56,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
+
+  backButtonText: {
+    color: "#f8fafc",
+    fontSize: 17,
+    fontWeight: "800",
+  },
+
   nextButton: {
+    flex: 1,
     minHeight: 56,
     borderRadius: 16,
     backgroundColor: "#22d3ee",
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 20,
   },
+
   nextButtonText: {
     color: "#082f49",
     fontSize: 18,
     fontWeight: "900",
-  },
-  skipButton: {
-    minHeight: 54,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  skipButtonText: {
-    color: "#f8fafc",
-    fontSize: 17,
-    fontWeight: "800",
   },
 });

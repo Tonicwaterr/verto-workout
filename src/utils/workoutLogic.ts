@@ -223,6 +223,12 @@ export function normalizeDifficultyLevel(
   return 3;
 }
 
+export function isProgressionEnabled(
+  level: DifficultyLevel
+): boolean {
+  return level === 3 || level === 5;
+}
+
 export function getBasePlan(maxReps: number, level: number): number[] {
   const normalizedLevel = normalizeDifficultyLevel(level);
   const adjustment = LEVEL_ADJUSTMENTS[normalizedLevel];

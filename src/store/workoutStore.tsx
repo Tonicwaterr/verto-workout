@@ -21,6 +21,7 @@ import {
   buildInitialState,
   calculateProgressionUpdate,
   getMovement,
+  isProgressionEnabled,
   isRepsSettings,
   migrateAppState,
 } from "../utils/workoutLogic";
@@ -293,12 +294,21 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         Math.round(Number(currentSettings.maxReps) || 1)
       );
 
-      const progressionUpdate =
-        calculateProgressionUpdate(
-          currentEstimatedMax,
-          currentSettings.progressPoints ?? 0,
-          movement
-        );
+      const progressionEnabled =
+        isProgressionEnabled(currentSettings.level);
+
+      const progressionUpdate = progressionEnabled
+        ? calculateProgressionUpdate(
+            currentEstimatedMax,
+            currentSettings.progressPoints ?? 0,
+            movement
+          )
+        : {
+            nextMaxReps: currentEstimatedMax,
+            nextProgressPoints:
+              currentSettings.progressPoints ?? 0,
+            maxRepsChange: 0,
+          };
 
       const {
         nextMaxReps,
@@ -307,30 +317,34 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
       } = progressionUpdate;
 
       const historyLabel =
-        maxRepsChange > 0
-          ? "Max increased"
-          : maxRepsChange < 0
-            ? "Max reduced"
-            : movement > 0
-              ? "Improved"
-              : movement < 0
-                ? "Reduced"
-                : "Unchanged";
+        !progressionEnabled
+          ? "Recovery"
+          : maxRepsChange > 0
+            ? "Max increased"
+            : maxRepsChange < 0
+              ? "Max reduced"
+              : movement > 0
+                ? "Improved"
+                : movement < 0
+                  ? "Reduced"
+                  : "Unchanged";
 
       const performanceText = isBulgarianExercise
         ? `Planned ${plannedFinalSet} per leg, completed ${actualFinalSet} per leg`
         : `Planned ${plannedFinalSet}, completed ${actualFinalSet}`;
 
       const progressionText =
-        maxRepsChange > 0
-          ? isBulgarianExercise
-            ? ` Estimated max increased from ${currentEstimatedMax} to ${nextMaxReps} per leg.`
-            : ` Estimated max increased from ${currentEstimatedMax} to ${nextMaxReps}.`
-          : maxRepsChange < 0
+        !progressionEnabled
+          ? " Light workout did not affect progression."
+          : maxRepsChange > 0
             ? isBulgarianExercise
-              ? ` Estimated max reduced from ${currentEstimatedMax} to ${nextMaxReps} per leg.`
-              : ` Estimated max reduced from ${currentEstimatedMax} to ${nextMaxReps}.`
-            : "";
+              ? ` Estimated max increased from ${currentEstimatedMax} to ${nextMaxReps} per leg.`
+              : ` Estimated max increased from ${currentEstimatedMax} to ${nextMaxReps}.`
+            : maxRepsChange < 0
+              ? isBulgarianExercise
+                ? ` Estimated max reduced from ${currentEstimatedMax} to ${nextMaxReps} per leg.`
+                : ` Estimated max reduced from ${currentEstimatedMax} to ${nextMaxReps}.`
+              : "";
 
       const historyItem = {
         date: new Date().toLocaleDateString("sv-SE"),
@@ -362,11 +376,13 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
           currentPass: 1,
           resultValue: 0,
           lastFeedback:
-            maxRepsChange > 0
-              ? `Estimated max increased to ${nextMaxReps}.`
-              : maxRepsChange < 0
-                ? `Estimated max reduced to ${nextMaxReps}.`
-                : "Estimated max unchanged.",
+            !progressionEnabled
+              ? "Light workout completed without affecting progression."
+              : maxRepsChange > 0
+                ? `Estimated max increased to ${nextMaxReps}.`
+                : maxRepsChange < 0
+                  ? `Estimated max reduced to ${nextMaxReps}.`
+                  : "Estimated max unchanged.",
           plan: [],
         },
       };

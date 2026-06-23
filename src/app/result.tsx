@@ -11,6 +11,7 @@ import { useWorkoutStore } from "../store/workoutStore";
 import {
   calculateProgressionUpdate,
   getMovement,
+  isProgressionEnabled,
   isRepsSettings,
 } from "../utils/workoutLogic";
 
@@ -34,6 +35,11 @@ export default function ResultScreen() {
 
   const currentSettings = getCurrentSettings();
 
+  const progressionEnabled =
+    isRepsSettings(currentSettings)
+      ? isProgressionEnabled(currentSettings.level)
+      : false;
+
   const currentEstimatedMax =
     isRepsSettings(currentSettings)
       ? Math.max(
@@ -47,14 +53,23 @@ export default function ResultScreen() {
       ? currentSettings.progressPoints ?? 0
       : 0;
 
-  const progressionPreview =
-    calculateProgressionUpdate(
-      currentEstimatedMax,
-      currentProgressPoints,
-      movement
-    );
+  const progressionPreview = progressionEnabled
+    ? calculateProgressionUpdate(
+        currentEstimatedMax,
+        currentProgressPoints,
+        movement
+      )
+    : {
+        nextMaxReps: currentEstimatedMax,
+        nextProgressPoints: currentProgressPoints,
+        maxRepsChange: 0,
+      };
 
   function getFeedbackText() {
+    if (!progressionEnabled) {
+      return "Light workouts support recovery and do not affect your progression.";
+    }
+    
     if (progressionPreview.maxRepsChange > 0) {
       return isBulgarianExercise
         ? `Great result. Your estimated max will increase from ${currentEstimatedMax} to ${progressionPreview.nextMaxReps} reps per leg.`

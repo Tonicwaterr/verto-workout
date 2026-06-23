@@ -244,7 +244,8 @@ export default function ExerciseScreen() {
    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
     <SafeAreaView style={styles.screen}>
         <View style={styles.container}>
-          <View style={styles.card}>
+          
+
             <View style={styles.cardHeader}>
               <Text style={styles.title}>{exercise.key}</Text>
 
@@ -253,11 +254,7 @@ export default function ExerciseScreen() {
               </Pressable>
             </View>
 
-            <Image
-              source={EXERCISE_IMAGES[exercise.key]}
-              style={styles.exerciseImage}
-              resizeMode="contain"
-            />
+            
 
             {isRepsExercise ? (
               <>
@@ -320,8 +317,9 @@ export default function ExerciseScreen() {
                   </View>
                 </View>
 
-                <View style={styles.previewBox}>
-                  <Text style={styles.previewLabel}>Next exercise</Text>
+                <View style={styles.previewSection}>
+                  <Text style={styles.previewLabel}>Next workout</Text>
+
                   <Text style={styles.previewValue}>
                     {previewPlan.join(" / ")}
                   </Text>
@@ -381,6 +379,12 @@ export default function ExerciseScreen() {
               </>
             )}
 
+            <Image
+              source={EXERCISE_IMAGES[exercise.key]}
+              style={styles.exerciseImage}
+              resizeMode="contain"
+            />
+
             <Pressable style={styles.continueButton} onPress={handleContinue}>
               <Text style={styles.continueButtonText}>Continue</Text>
             </Pressable>
@@ -388,7 +392,7 @@ export default function ExerciseScreen() {
             <Pressable style={styles.secondaryButton} onPress={handleResetExercise}>
               <Text style={styles.secondaryButtonText}>Reset Exercise</Text>
             </Pressable>
-          </View>
+          
         </View>
 
         <Modal
@@ -536,13 +540,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "800",
   },
-  card: {
-    borderRadius: 24,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    padding: 14,
-  },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -582,6 +579,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 6,
     paddingVertical: 8,
+    marginBottom: 20,
   },
   levelButtonSelected: {
     backgroundColor: "rgba(34,211,238,0.16)",
@@ -595,29 +593,26 @@ const styles = StyleSheet.create({
   levelButtonTextSelected: {
     color: "#22d3ee",
   },
-  previewBox: {
-    borderRadius: 18,
-    backgroundColor: "rgba(34,211,238,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(34,211,238,0.35)",
-    padding: 12,
-    marginBottom: 12,
+  previewSection: {
     alignItems: "center",
+    marginTop: 2,
+    marginBottom: -6,
   },
   previewLabel: {
     color: "#94a3b8",
-    fontSize: 14,
+    fontSize: 13,
     marginBottom: 8,
   },
   previewValue: {
     color: "#f8fafc",
     fontSize: 24,
     fontWeight: "900",
+    letterSpacing: 1,
   },
   continueButton: {
     minHeight: 50,
     borderRadius: 16,
-    backgroundColor: "#34d399",
+    backgroundColor: "#22d3ee",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 4,
@@ -644,7 +639,7 @@ const styles = StyleSheet.create({
   },
   exerciseImage: {
     width: "100%",
-    height: 220,
+    height: 300,
   },
   settingsSummary: {
     minHeight: 64,
