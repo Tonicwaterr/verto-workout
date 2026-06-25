@@ -2,7 +2,7 @@
   "expo": {
     "name": "Verto Workout",
     "slug": "verto-workout",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "vertoworkout",
@@ -50,7 +50,8 @@
         }
       ],
       "expo-audio",
-      "expo-asset"
+      "expo-asset",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
