@@ -32,9 +32,11 @@ export type RepsExerciseSettings = {
 };
 
 export type TimedExerciseSettings = {
-  workTime: string;
+  estimatedMaxSeconds: string;
+  level: DifficultyLevel;
   restTime: string;
   history: WorkoutHistoryItem[];
+  progressPoints: number;
 };
 
 export type CustomTimerSettings = {
@@ -70,6 +72,8 @@ export type WorkoutState = {
   lastFeedback: string;
   plan: number[];
   restTime: number;
+  progressModeActive: boolean;
+  overtimeSeconds: number;
 };
 
 export type AppState = {

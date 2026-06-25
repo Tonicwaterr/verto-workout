@@ -23,8 +23,11 @@ import {
   DEFAULT_TIMED_WORK,
   DIFFICULTY_OPTIONS,
   buildPlan,
+  buildTimedPlan,
   isRepsSettings,
+  isTimedSettings,
   normalizeDifficultyLevel,
+  roundToNearestFive,
 } from "../utils/workoutLogic";
 
 export default function ExerciseScreen() {
@@ -52,69 +55,135 @@ export default function ExerciseScreen() {
   const [settingsModalStep, setSettingsModalStep] =
     useState<1 | 2>(1);
 
-  const [draftMaxReps, setDraftMaxReps] = useState("");
+  const [draftMaxValue, setDraftMaxValue] = useState("");
   const [draftRestTime, setDraftRestTime] = useState("");
 
   const isRepsExercise =
-    exercise.mode === "reps" || exercise.mode === "bulgarian";
+    exercise.mode === "reps" ||
+    exercise.mode === "bulgarian";
 
-  const isBulgarianExercise = exercise.mode === "bulgarian";
-  
-    const isCustomTimer = exercise.mode === "custom_timer";
+  const isTimedExercise =
+    exercise.mode === "timed_plank" ||
+    exercise.mode === "timed_superman" ||
+    exercise.mode === "timed_mountain";
+
+  const isConfigurableExercise =
+    isRepsExercise || isTimedExercise;
+
+  const isBulgarianExercise =
+    exercise.mode === "bulgarian";
+
+  const isCustomTimer =
+    exercise.mode === "custom_timer";
 
   const previewPlan = useMemo(() => {
-    if (!isRepsSettings(settings)) {
-      return [0, 0, 0, 0, 0];
+    if (isRepsSettings(settings)) {
+      const parsedMaxReps =
+        Number(settings.maxReps);
+
+      if (!parsedMaxReps) {
+        return [0, 0, 0, 0, 0];
+      }
+
+      return buildPlan(
+        parsedMaxReps,
+        normalizeDifficultyLevel(settings.level)
+      );
     }
 
-    const parsedMaxReps = Number(settings.maxReps);
+    if (isTimedSettings(settings)) {
+      const parsedMaxSeconds =
+        Number(settings.estimatedMaxSeconds);
 
-    if (!parsedMaxReps) {
-      return [0, 0, 0, 0, 0];
+      if (!parsedMaxSeconds) {
+        return [0, 0, 0, 0, 0];
+      }
+
+      return buildTimedPlan(
+        parsedMaxSeconds,
+        normalizeDifficultyLevel(settings.level)
+      );
     }
 
-    const normalizedLevel = normalizeDifficultyLevel(settings.level);
-
-    return buildPlan(
-      parsedMaxReps,
-      normalizedLevel
-    );
+    return [0, 0, 0, 0, 0];
   }, [settings]);
 
-  const maxRepsValue = isRepsSettings(settings) ? settings.maxReps : "";
-  const levelValue = isRepsSettings(settings)
-    ? normalizeDifficultyLevel(settings.level)
-    : 3;
+  const maxRepsValue =
+    isRepsSettings(settings)
+      ? settings.maxReps
+      : "";
 
-  const restTimeValue = "restTime" in settings ? settings.restTime : "";
-  const workTimeValue = "workTime" in settings ? settings.workTime : "";
-  const roundsValue = "rounds" in settings ? settings.rounds : "";
+  const estimatedMaxSecondsValue =
+    isTimedSettings(settings)
+      ? settings.estimatedMaxSeconds
+      : "";
+
+  const levelValue =
+    isRepsSettings(settings) ||
+    isTimedSettings(settings)
+      ? normalizeDifficultyLevel(settings.level)
+      : 3;
+
+  const restTimeValue =
+    "restTime" in settings
+      ? settings.restTime
+      : "";
+
+  const workTimeValue =
+    isCustomTimer && "workTime" in settings
+      ? settings.workTime
+      : "";
+
+  const roundsValue =
+    "rounds" in settings
+      ? settings.rounds
+      : "";
+
+  const configuredMaxValue =
+    isRepsExercise
+      ? maxRepsValue
+      : isTimedExercise
+        ? estimatedMaxSecondsValue
+        : "";
 
   const hasConfiguredExercise =
-    !isRepsExercise || maxRepsValue.trim().length > 0;
+    !isConfigurableExercise ||
+    configuredMaxValue.trim().length > 0;
   
   useEffect(() => {
-    if (!isRepsExercise || maxRepsValue.trim().length > 0) {
+    if (
+      !isConfigurableExercise ||
+      configuredMaxValue.trim().length > 0
+    ) {
       return;
     }
 
-    setDraftMaxReps(maxRepsValue);
+    setDraftMaxValue(configuredMaxValue);
     setDraftRestTime(restTimeValue);
     setSettingsModalStep(1);
     setIsSettingsModalVisible(true);
   }, [
     selectedExercise,
-    isRepsExercise,
-    maxRepsValue,
+    isConfigurableExercise,
+    configuredMaxValue,
     restTimeValue,
   ]);
   
   function openSettingsModal() {
-    if (!isRepsExercise || !isRepsSettings(settings)) {
+    if (
+      !isConfigurableExercise ||
+      (!isRepsSettings(settings) &&
+        !isTimedSettings(settings))
+    ) {
       return;
     }
 
-    setDraftMaxReps(settings.maxReps);
+    setDraftMaxValue(
+      isRepsSettings(settings)
+        ? settings.maxReps
+        : settings.estimatedMaxSeconds
+    );
+
     setDraftRestTime(settings.restTime);
     setSettingsModalStep(1);
     setIsSettingsModalVisible(true);
@@ -131,44 +200,88 @@ export default function ExerciseScreen() {
   }
 
   function saveExerciseSettings() {
-    const parsedMaxReps = Number(draftMaxReps);
-    const parsedRestTime =
-      Number(draftRestTime) || DEFAULT_REPS_REST;
+    const parsedMaxValue =
+      Number(draftMaxValue);
 
-    if (!Number.isFinite(parsedMaxReps) || parsedMaxReps < 1) {
+    const defaultRestTime =
+      isTimedExercise
+        ? DEFAULT_TIMED_REST
+        : DEFAULT_REPS_REST;
+
+    const parsedRestTime =
+      Number(draftRestTime) ||
+      defaultRestTime;
+
+    const minimumMaxValue =
+      isTimedExercise ? 5 : 1;
+
+    if (
+      !Number.isFinite(parsedMaxValue) ||
+      parsedMaxValue < minimumMaxValue
+    ) {
       Alert.alert(
-        "Enter estimated max reps",
-        "Estimated max reps must be at least 1."
+        isTimedExercise
+          ? "Enter estimated max time"
+          : "Enter estimated max reps",
+        isTimedExercise
+          ? "Estimated max time must be at least 5 seconds."
+          : "Estimated max reps must be at least 1."
       );
+
       return;
     }
 
-    if (!Number.isFinite(parsedRestTime) || parsedRestTime < 1) {
+    if (
+      !Number.isFinite(parsedRestTime) ||
+      parsedRestTime < 1
+    ) {
       Alert.alert(
         "Enter rest time",
         "Rest time must be at least 1 second."
       );
+
       return;
     }
 
-    if (!isRepsSettings(settings)) {
+    if (isRepsSettings(settings)) {
+      const nextMaxReps =
+        String(Math.round(parsedMaxValue));
+
+      const estimatedMaxChanged =
+        nextMaxReps !== settings.maxReps;
+
+      updateCurrentSettings({
+        maxReps: nextMaxReps,
+        restTime: String(
+          Math.round(parsedRestTime)
+        ),
+        progressPoints: estimatedMaxChanged
+          ? 0
+          : settings.progressPoints,
+      });
+    } else if (isTimedSettings(settings)) {
+      const nextMaxSeconds =
+        String(
+          roundToNearestFive(parsedMaxValue)
+        );
+
+      const estimatedMaxChanged =
+        nextMaxSeconds !==
+        settings.estimatedMaxSeconds;
+
+      updateCurrentSettings({
+        estimatedMaxSeconds:
+          nextMaxSeconds,
+        restTime: String(
+          Math.round(parsedRestTime)
+        ),
+        progressPoints: estimatedMaxChanged
+          ? 0
+          : settings.progressPoints,
+      });
+    } else {
       return;
     }
-
-    const nextMaxReps = String(
-      Math.round(parsedMaxReps)
-    );
-
-    const estimatedMaxChanged =
-      nextMaxReps !== settings.maxReps;
-
-    updateCurrentSettings({
-      maxReps: nextMaxReps,
-      restTime: String(Math.round(parsedRestTime)),
-      progressPoints: estimatedMaxChanged
-        ? 0
-        : settings.progressPoints,
-    });
 
     setIsSettingsModalVisible(false);
     setSettingsModalStep(1);
@@ -203,6 +316,54 @@ export default function ExerciseScreen() {
       return;
     }
 
+    if (
+      isTimedExercise &&
+      isTimedSettings(settings)
+    ) {
+      const parsedMaxSeconds =
+        Number(settings.estimatedMaxSeconds);
+
+      if (
+        !parsedMaxSeconds ||
+        parsedMaxSeconds < 5
+      ) {
+        return;
+      }
+
+      const parsedRestTime =
+        Number(settings.restTime) ||
+        DEFAULT_TIMED_REST;
+
+      const normalizedLevel =
+        normalizeDifficultyLevel(
+          settings.level
+        );
+
+      const normalizedMaxSeconds =
+        roundToNearestFive(
+          parsedMaxSeconds
+        );
+
+      const plan = buildTimedPlan(
+        normalizedMaxSeconds,
+        normalizedLevel
+      );
+
+      updateCurrentSettings({
+        estimatedMaxSeconds:
+          String(normalizedMaxSeconds),
+        level: normalizedLevel,
+      });
+
+      startTimedWorkout(
+        plan,
+        parsedRestTime
+      );
+
+      router.push("/timer");
+      return;
+    }
+
     if (isCustomTimer && "workTime" in settings && "restTime" in settings && "rounds" in settings) {
       const parsedWorkTime = Number(settings.workTime) || DEFAULT_TIMED_WORK;
       const parsedRestTime = Number(settings.restTime) || DEFAULT_TIMED_REST;
@@ -211,14 +372,6 @@ export default function ExerciseScreen() {
       startIntervalWorkout(parsedWorkTime, parsedRestTime, parsedRounds);
       router.push("/timer");
       return;
-    }
-
-    if (!isCustomTimer && "workTime" in settings && "restTime" in settings) {
-      const parsedWorkTime = Number(settings.workTime) || DEFAULT_TIMED_WORK;
-      const parsedRestTime = Number(settings.restTime) || DEFAULT_TIMED_REST;
-
-      startTimedWorkout(parsedWorkTime, parsedRestTime);
-      router.push("/timer");
     }
   }
 
@@ -256,7 +409,7 @@ export default function ExerciseScreen() {
 
             
 
-            {isRepsExercise ? (
+            {isConfigurableExercise ? (
               <>
                 <View style={styles.settingsSummary}>
                   <View style={styles.settingsSummaryText}>
@@ -266,11 +419,19 @@ export default function ExerciseScreen() {
 
                     <Text style={styles.settingsSummaryValue}>
                       {hasConfiguredExercise
-                        ? `Estimated max: ${maxRepsValue}${
-                            isBulgarianExercise ? " per leg" : " reps"
-                          }  •  Rest: ${
-                            restTimeValue || DEFAULT_REPS_REST
-                          } sec`
+                        ? isRepsExercise
+                          ? `Estimated max: ${maxRepsValue}${
+                              isBulgarianExercise
+                                ? " per leg"
+                                : " reps"
+                            }  •  Rest: ${
+                              restTimeValue ||
+                              DEFAULT_REPS_REST
+                            } sec`
+                          : `Estimated max: ${estimatedMaxSecondsValue} sec  •  Rest: ${
+                              restTimeValue ||
+                              DEFAULT_TIMED_REST
+                            } sec`
                         : "Setup required"}
                     </Text>
                   </View>
@@ -322,6 +483,7 @@ export default function ExerciseScreen() {
 
                   <Text style={styles.previewValue}>
                     {previewPlan.join(" / ")}
+                    {isTimedExercise ? " sec" : ""}
                   </Text>
                 </View>
               </>
@@ -449,16 +611,22 @@ export default function ExerciseScreen() {
 
                       <View style={styles.modalField}>
                         <Text style={styles.label}>
-                          {isBulgarianExercise
-                            ? "Estimated max reps per leg"
-                            : "Estimated max reps"}
+                          {isTimedExercise
+                            ? "Estimated max time"
+                            : isBulgarianExercise
+                              ? "Estimated max reps per leg"
+                              : "Estimated max reps"}
                         </Text>
 
                         <TextInput
-                          value={draftMaxReps}
-                          onChangeText={setDraftMaxReps}
+                          value={draftMaxValue}
+                          onChangeText={setDraftMaxValue}
                           keyboardType="number-pad"
-                          placeholder="For example 20"
+                          placeholder={
+                            isTimedExercise
+                              ? "For example 60 seconds"
+                              : "For example 20"
+                          }
                           placeholderTextColor="#64748b"
                           style={styles.input}
                         />
@@ -473,7 +641,11 @@ export default function ExerciseScreen() {
                           value={draftRestTime}
                           onChangeText={setDraftRestTime}
                           keyboardType="number-pad"
-                          placeholder="90 seconds"
+                          placeholder={
+                            isTimedExercise
+                              ? "20 seconds"
+                              : "90 seconds"
+                          }
                           placeholderTextColor="#64748b"
                           style={styles.input}
                         />

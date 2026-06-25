@@ -14,16 +14,21 @@ import {
   AppState,
   ExerciseSettings,
   RepsExerciseSettings,
+  TimedExerciseSettings,
 } from "../types/workout";
 
 import {
   buildInitialSettingsForExercise,
   buildInitialState,
   calculateProgressionUpdate,
+  calculateTimedProgressionUpdate,
   getMovement,
+  getTimedMovement,
   isProgressionEnabled,
   isRepsSettings,
+  isTimedSettings,
   migrateAppState,
+  roundToNearestFive,
 } from "../utils/workoutLogic";
 
 type WorkoutStore = {
@@ -33,7 +38,10 @@ type WorkoutStore = {
   getCurrentSettings: () => ExerciseSettings;
   updateCurrentSettings: (updates: Partial<ExerciseSettings>) => void;
   startRepsWorkout: (plan: number[], restTime: number) => void;
-  startTimedWorkout: (workTime: number, restTime: number) => void;
+  startTimedWorkout: (
+    planOrWorkTime: number[] | number,
+    restTime: number
+  ) => void;
   startIntervalWorkout: (
     workTime: number,
     restTime: number,
@@ -43,6 +51,9 @@ type WorkoutStore = {
   tickTimer: () => void;
   startRestTimer: () => void;
   startNextTimedPass: () => void;
+  enterTimedProgressMode: () => void;
+  stopTimedFinalSet: () => void;
+  saveTimedWorkoutResult: () => void;
   setResultValue: (value: number) => void;
   saveRepsWorkoutResult: () => void;
   abortWorkout: () => void;
@@ -147,8 +158,21 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
     }));
   }
 
-  function startTimedWorkout(workTime: number, restTime: number) {
-    const plan = [workTime, workTime, workTime, workTime, workTime];
+  function startTimedWorkout(
+    planOrWorkTime: number[] | number,
+    restTime: number
+  ) {
+    const plan = Array.isArray(planOrWorkTime)
+      ? planOrWorkTime
+      : [
+          planOrWorkTime,
+          planOrWorkTime,
+          planOrWorkTime,
+          planOrWorkTime,
+          planOrWorkTime,
+        ];
+
+    const firstSetTime = plan[0] ?? 0;
 
     setAppState((currentState) => ({
       ...currentState,
@@ -157,13 +181,15 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         active: true,
         workoutMode: "timed",
         currentPass: 1,
-        timerLeft: workTime,
-        timerRunning: false,
+        timerLeft: firstSetTime,
+        timerRunning: true,
         timerPhase: "work",
         resultValue: 0,
         lastFeedback: "Ready to save.",
         plan,
         restTime,
+        progressModeActive: false,
+        overtimeSeconds: 0,
       },
     }));
   }
@@ -205,19 +231,43 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
 
   function tickTimer() {
     setAppState((currentState) => {
-      if (!currentState.workout.active) {
+      const workout = currentState.workout;
+
+      if (!workout.active) {
         return currentState;
       }
 
-      if (currentState.workout.timerLeft <= 0) {
+      if (
+        workout.workoutMode === "timed" &&
+        !workout.timerRunning
+      ) {
+        return currentState;
+      }
+
+      if (
+        workout.workoutMode === "timed" &&
+        workout.timerPhase === "work" &&
+        workout.progressModeActive
+      ) {
+        return {
+          ...currentState,
+          workout: {
+            ...workout,
+            overtimeSeconds:
+              workout.overtimeSeconds + 1,
+          },
+        };
+      }
+
+      if (workout.timerLeft <= 0) {
         return currentState;
       }
 
       return {
         ...currentState,
         workout: {
-          ...currentState.workout,
-          timerLeft: currentState.workout.timerLeft - 1,
+          ...workout,
+          timerLeft: workout.timerLeft - 1,
         },
       };
     });
@@ -230,14 +280,19 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         ...currentState.workout,
         timerPhase: "rest",
         timerLeft: currentState.workout.restTime,
+        progressModeActive: false,
+        overtimeSeconds: 0,
       },
     }));
   }
 
   function startNextTimedPass() {
     setAppState((currentState) => {
-      const nextPass = currentState.workout.currentPass + 1;
-      const nextWorkTime = currentState.workout.plan[nextPass - 1] ?? 0;
+      const nextPass =
+        currentState.workout.currentPass + 1;
+
+      const nextWorkTime =
+        currentState.workout.plan[nextPass - 1] ?? 0;
 
       return {
         ...currentState,
@@ -246,6 +301,56 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
           currentPass: nextPass,
           timerPhase: "work",
           timerLeft: nextWorkTime,
+          progressModeActive: false,
+          overtimeSeconds: 0,
+        },
+      };
+    });
+  }
+
+  function enterTimedProgressMode() {
+    setAppState((currentState) => {
+      const workout = currentState.workout;
+
+      if (
+        workout.workoutMode !== "timed" ||
+        workout.timerPhase !== "work" ||
+        workout.progressModeActive
+      ) {
+        return currentState;
+      }
+
+      return {
+        ...currentState,
+        workout: {
+          ...workout,
+          timerLeft: 0,
+          progressModeActive: true,
+          overtimeSeconds: 0,
+        },
+      };
+    });
+  }
+
+  function stopTimedFinalSet() {
+    setAppState((currentState) => {
+      const workout = currentState.workout;
+      const plannedFinalSet = workout.plan[4] ?? 0;
+
+      const completedSeconds =
+        workout.progressModeActive
+          ? plannedFinalSet + workout.overtimeSeconds
+          : Math.max(
+              0,
+              plannedFinalSet - workout.timerLeft
+            );
+
+      return {
+        ...currentState,
+        workout: {
+          ...workout,
+          resultValue: completedSeconds,
+          timerRunning: false,
         },
       };
     });
@@ -388,6 +493,137 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
       };
     });
   }
+
+  function saveTimedWorkoutResult() {
+    setAppState((currentState) => {
+      const selectedExercise =
+        currentState.selectedExercise;
+
+      const currentSettings =
+        currentState.settings[selectedExercise];
+
+      if (!isTimedSettings(currentSettings)) {
+        return currentState;
+      }
+
+      const workout = currentState.workout;
+
+      const plannedFinalSet =
+        workout.plan[4] ?? 0;
+
+      const actualFinalSet =
+        workout.resultValue;
+
+      const movement = getTimedMovement(
+        plannedFinalSet,
+        actualFinalSet
+      );
+
+      const currentEstimatedMax =
+        roundToNearestFive(
+          Number(
+            currentSettings.estimatedMaxSeconds
+          ) || 5
+        );
+
+      const progressionEnabled =
+        isProgressionEnabled(currentSettings.level);
+
+      const progressionUpdate = progressionEnabled
+        ? calculateTimedProgressionUpdate(
+            currentEstimatedMax,
+            currentSettings.progressPoints ?? 0,
+            movement
+          )
+        : {
+            nextMaxSeconds: currentEstimatedMax,
+            nextProgressPoints:
+              currentSettings.progressPoints ?? 0,
+            maxSecondsChange: 0,
+          };
+
+      const {
+        nextMaxSeconds,
+        nextProgressPoints,
+        maxSecondsChange,
+      } = progressionUpdate;
+
+      const historyLabel =
+        !progressionEnabled
+          ? "Recovery"
+          : maxSecondsChange > 0
+            ? "Max increased"
+            : maxSecondsChange < 0
+              ? "Max reduced"
+              : movement > 0
+                ? "Improved"
+                : movement < 0
+                  ? "Reduced"
+                  : "Unchanged";
+
+      const performanceText =
+        `Planned ${plannedFinalSet} sec, ` +
+        `completed ${actualFinalSet} sec`;
+
+      const progressionText =
+        !progressionEnabled
+          ? " Light workout did not affect progression."
+          : maxSecondsChange > 0
+            ? ` Estimated max increased from ${currentEstimatedMax} to ${nextMaxSeconds} sec.`
+            : maxSecondsChange < 0
+              ? ` Estimated max reduced from ${currentEstimatedMax} to ${nextMaxSeconds} sec.`
+              : "";
+
+      const historyItem = {
+        date: new Date().toLocaleDateString("sv-SE"),
+        exercise: selectedExercise,
+        subtitle:
+          `${performanceText}.${progressionText}`,
+        label: historyLabel,
+        movement,
+      };
+
+      const updatedSettings: TimedExerciseSettings = {
+        ...currentSettings,
+        estimatedMaxSeconds:
+          String(nextMaxSeconds),
+        progressPoints: nextProgressPoints,
+        history: [
+          historyItem,
+          ...currentSettings.history,
+        ],
+      };
+
+      return {
+        ...currentState,
+        settings: {
+          ...currentState.settings,
+          [selectedExercise]: updatedSettings,
+        },
+        workout: {
+          ...currentState.workout,
+          active: false,
+          currentPass: 1,
+          timerLeft:
+            currentState.workout.restTime,
+          timerRunning: false,
+          timerPhase: "rest",
+          resultValue: 0,
+          lastFeedback:
+            !progressionEnabled
+              ? "Light workout completed without affecting progression."
+              : maxSecondsChange > 0
+                ? `Estimated max increased to ${nextMaxSeconds} seconds.`
+                : maxSecondsChange < 0
+                  ? `Estimated max reduced to ${nextMaxSeconds} seconds.`
+                  : "Estimated max unchanged.",
+          plan: [],
+          progressModeActive: false,
+          overtimeSeconds: 0,
+        },
+      };
+    });
+  }
   
   function abortWorkout() {
     setAppState((currentState) => ({
@@ -403,6 +639,8 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
           resultValue: 0,
           lastFeedback: "Ready to save.",
           plan: [],
+          progressModeActive: false,
+          overtimeSeconds: 0,
         },
     }));
   }
@@ -499,6 +737,9 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         tickTimer,
         startRestTimer,
         startNextTimedPass,
+        enterTimedProgressMode,
+        stopTimedFinalSet,
+        saveTimedWorkoutResult,
         setResultValue,
         saveRepsWorkoutResult,
         abortWorkout,

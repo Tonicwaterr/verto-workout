@@ -3,6 +3,7 @@ import {
   DifficultyLevel,
   ExerciseSettings,
   RepsExerciseSettings,
+  TimedExerciseSettings,
 } from "../types/workout";
 
 import { EXERCISES } from "../data/exercises";
@@ -60,9 +61,11 @@ export function buildInitialSettings(): AppState["settings"] {
       };
     } else {
       settings[exercise.key] = {
-        workTime: "",
+        estimatedMaxSeconds: "",
+        level: 3,
         restTime: "",
         history: [],
+        progressPoints: 0,
       };
     }
   }
@@ -104,9 +107,11 @@ export function buildInitialSettingsForExercise(
   }
 
   return {
-    workTime: "",
+    estimatedMaxSeconds: "",
+    level: 3,
     restTime: "",
     history: [],
+    progressPoints: 0,
   };
 }
 
@@ -133,6 +138,8 @@ export function buildInitialState(): AppState {
       lastFeedback: "Ready to save.",
       plan: [],
       restTime: DEFAULT_REPS_REST,
+      progressModeActive: false,
+      overtimeSeconds: 0,
     },
   };
 }
@@ -154,9 +161,13 @@ export function migrateAppState(
     ...defaults.settings,
   };
 
-  for (const [exerciseKey, settings] of Object.entries(
+  for (const [exerciseKey, rawSettings] of Object.entries(
     savedState.settings ?? {}
   )) {
+    const settings = rawSettings as ExerciseSettings &
+      Record<string, unknown>;
+
+    // Reps-based exercises, including older saved versions.
     if ("maxReps" in settings) {
       const legacySettings =
         settings as LegacyRepsExerciseSettings;
@@ -177,15 +188,83 @@ export function migrateAppState(
           ? legacySettings.history
           : [],
         progressPoints: Math.max(
-          -2,
-          Math.min(2, Math.trunc(storedProgressPoints))
+          -(PROGRESSION_THRESHOLD - 1),
+          Math.min(
+            PROGRESSION_THRESHOLD - 1,
+            Math.trunc(storedProgressPoints)
+          )
         ),
       };
 
       continue;
     }
 
-    migratedSettings[exerciseKey] = settings;
+    // Custom Interval Timer must keep its own settings structure.
+    if ("rounds" in settings) {
+      migratedSettings[exerciseKey] = {
+        workTime:
+          typeof settings.workTime === "string"
+            ? settings.workTime
+            : "",
+        restTime:
+          typeof settings.restTime === "string"
+            ? settings.restTime
+            : "",
+        rounds:
+          typeof settings.rounds === "string"
+            ? settings.rounds
+            : "",
+        history: Array.isArray(settings.history)
+          ? settings.history
+          : [],
+      };
+
+      continue;
+    }
+
+    // Timed exercises:
+    // Supports both old "workTime" data and new
+    // "estimatedMaxSeconds" data.
+    if (
+      "estimatedMaxSeconds" in settings ||
+      "workTime" in settings
+    ) {
+      const estimatedMaxSeconds =
+        typeof settings.estimatedMaxSeconds === "string"
+          ? settings.estimatedMaxSeconds
+          : typeof settings.workTime === "string"
+            ? settings.workTime
+            : "";
+
+      const storedProgressPoints =
+        typeof settings.progressPoints === "number" &&
+        Number.isFinite(settings.progressPoints)
+          ? settings.progressPoints
+          : 0;
+
+      migratedSettings[exerciseKey] = {
+        estimatedMaxSeconds,
+        level: normalizeDifficultyLevel(
+          Number(settings.level ?? 3)
+        ),
+        restTime:
+          typeof settings.restTime === "string"
+            ? settings.restTime
+            : "",
+        history: Array.isArray(settings.history)
+          ? settings.history
+          : [],
+        progressPoints: Math.max(
+          -(PROGRESSION_THRESHOLD - 1),
+          Math.min(
+            PROGRESSION_THRESHOLD - 1,
+            Math.trunc(storedProgressPoints)
+          )
+        ),
+      };
+
+      continue;
+    }
   }
 
   return {
@@ -207,6 +286,12 @@ export function isRepsSettings(
   settings: ExerciseSettings
 ): settings is RepsExerciseSettings {
   return "maxReps" in settings;
+}
+
+export function isTimedSettings(
+  settings: ExerciseSettings
+): settings is TimedExerciseSettings {
+  return "estimatedMaxSeconds" in settings;
 }
 
 export function normalizeDifficultyLevel(
@@ -248,6 +333,39 @@ export function buildPlan(
   level: number
 ): number[] {
   return getBasePlan(maxReps, level);
+}
+
+export function roundToNearestFive(
+  value: number
+): number {
+  return Math.max(
+    5,
+    Math.round(value / 5) * 5
+  );
+}
+
+export function buildTimedPlan(
+  estimatedMaxSeconds: number,
+  level: number
+): number[] {
+  const normalizedLevel =
+    normalizeDifficultyLevel(level);
+
+  const adjustment =
+    LEVEL_ADJUSTMENTS[normalizedLevel];
+
+  const normalizedMax =
+    roundToNearestFive(estimatedMaxSeconds);
+
+  return BASE_PERCENTS.map((percent) => {
+    const adjustedPercent =
+      percent + adjustment;
+
+    const rawSeconds =
+      (normalizedMax * adjustedPercent) / 100;
+
+    return roundToNearestFive(rawSeconds);
+  });
 }
 
 export type ProgressionUpdate = {
@@ -292,6 +410,59 @@ export function calculateProgressionUpdate(
   };
 }
 
+export type TimedProgressionUpdate = {
+  nextMaxSeconds: number;
+  nextProgressPoints: number;
+  maxSecondsChange: number;
+};
+
+export function calculateTimedProgressionUpdate(
+  estimatedMaxSeconds: number,
+  progressPoints: number,
+  movement: number
+): TimedProgressionUpdate {
+  let nextMaxSeconds =
+    roundToNearestFive(estimatedMaxSeconds);
+
+  let nextProgressPoints =
+    Math.trunc(progressPoints) +
+    Math.trunc(movement);
+
+  let maxSecondsChange = 0;
+
+  while (
+    nextProgressPoints >=
+    PROGRESSION_THRESHOLD
+  ) {
+    nextMaxSeconds += 5;
+    nextProgressPoints -=
+      PROGRESSION_THRESHOLD;
+    maxSecondsChange += 5;
+  }
+
+  while (
+    nextProgressPoints <=
+    -PROGRESSION_THRESHOLD
+  ) {
+    if (nextMaxSeconds <= 5) {
+      nextProgressPoints =
+        -(PROGRESSION_THRESHOLD - 1);
+      break;
+    }
+
+    nextMaxSeconds -= 5;
+    nextProgressPoints +=
+      PROGRESSION_THRESHOLD;
+    maxSecondsChange -= 5;
+  }
+
+  return {
+    nextMaxSeconds,
+    nextProgressPoints,
+    maxSecondsChange,
+  };
+}
+
 export function getMovement(planned: number, actual: number): number {
   const difference = actual - planned;
 
@@ -303,6 +474,22 @@ export function getMovement(planned: number, actual: number): number {
   return 0;
 }
 
+export function getTimedMovement(
+  plannedSeconds: number,
+  actualSeconds: number
+): number {
+  const difference =
+    actualSeconds - plannedSeconds;
+
+  if (difference >= 10) return 2;
+  if (difference >= 5) return 1;
+
+  if (difference <= -10) return -2;
+  if (difference <= -5) return -1;
+
+  return 0;
+}
+
 export function getPassNote(passNumber: number): string {
   if (passNumber === 1) return "Warm-up / easy start";
   if (passNumber === 2) return "First harder set";
@@ -310,6 +497,33 @@ export function getPassNote(passNumber: number): string {
   if (passNumber === 4) return "Reduced load";
 
   return "Key set for progression";
+}
+
+export function getTimedSetName(
+  exerciseKey: string,
+  passNumber: number
+): string {
+  if (exerciseKey === "Plank") {
+    if (passNumber === 2) {
+      return "Left side plank";
+    }
+
+    if (passNumber === 4) {
+      return "Right side plank";
+    }
+
+    return "Front plank";
+  }
+
+  if (exerciseKey === "Superman") {
+    return "Superman hold";
+  }
+
+  if (exerciseKey === "Mountain Climbers") {
+    return "Mountain climbers";
+  }
+
+  return exerciseKey;
 }
 
 export function formatTime(totalSeconds: number): string {
