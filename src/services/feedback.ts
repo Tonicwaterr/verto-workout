@@ -23,7 +23,7 @@ async function playBeep(settings: GlobalSettings) {
   try {
     const player = getBeepPlayer();
 
-    player.seekTo(0);
+    await player.seekTo(0);
     player.play();
   } catch (error) {
     console.log("Beep failed:", error);

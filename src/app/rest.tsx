@@ -1,16 +1,16 @@
 import { router } from "expo-router";
 import { useEffect, useRef } from "react";
 import {
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { playTimerFeedback } from "../services/feedback";
-
 import { useWorkoutStore } from "../store/workoutStore";
+import { formatTime } from "../utils/workoutLogic";
 
 export default function RestScreen() {
   const {
@@ -21,39 +21,102 @@ export default function RestScreen() {
   } = useWorkoutStore();
 
   const workout = appState.workout;
+
+  const tickTimerRef = useRef(tickTimer);
   const hasCompletedRest = useRef(false);
+  const warningFeedbackKey = useRef<string | null>(null);
+  const completionFeedbackKey = useRef<string | null>(null);
 
   const nextSet = Math.min(workout.currentPass + 1, 5);
 
-  // Count down one second at a time.
+  const timerKey = `${workout.workoutMode}-${workout.currentPass}-${workout.timerPhase}-${workout.timerEndsAt ?? "none"}`;
+
   useEffect(() => {
-    if (workout.timerLeft <= 0) {
+    tickTimerRef.current = tickTimer;
+  }, [tickTimer]);
+
+  useEffect(() => {
+    if (
+      !workout.active ||
+      !workout.timerRunning ||
+      workout.timerPhase !== "rest"
+    ) {
       return;
     }
 
-    const timeoutId = setTimeout(() => {
-      tickTimer();
-    }, 1000);
+    const intervalId = setInterval(() => {
+      tickTimerRef.current();
+    }, 250);
 
-    return () => clearTimeout(timeoutId);
-  }, [workout.timerLeft, tickTimer]);
-
+    return () => clearInterval(intervalId);
+  }, [
+    workout.active,
+    workout.timerRunning,
+    workout.timerPhase,
+  ]);
 
   useEffect(() => {
-    if (workout.timerLeft > 0 || hasCompletedRest.current) {
-        return;
+    if (
+      !workout.active ||
+      !workout.timerRunning ||
+      workout.timerPhase !== "rest"
+    ) {
+      return;
     }
 
+    if (workout.timerLeft !== 5) {
+      return;
+    }
+
+    if (warningFeedbackKey.current === timerKey) {
+      return;
+    }
+
+    warningFeedbackKey.current = timerKey;
+
+    void playTimerFeedback(appState.globalSettings);
+  }, [
+    workout.active,
+    workout.timerRunning,
+    workout.timerPhase,
+    workout.timerLeft,
+    timerKey,
+    appState.globalSettings,
+  ]);
+
+  useEffect(() => {
+    if (
+      !workout.active ||
+      !workout.timerRunning ||
+      workout.timerPhase !== "rest"
+    ) {
+      return;
+    }
+
+    if (workout.timerLeft > 0 || hasCompletedRest.current) {
+      return;
+    }
+
+    if (completionFeedbackKey.current === timerKey) {
+      return;
+    }
+
+    completionFeedbackKey.current = timerKey;
     hasCompletedRest.current = true;
 
-    playTimerFeedback(appState.globalSettings);
+    void playTimerFeedback(appState.globalSettings);
+
     goToNextPass();
     router.replace("/workout");
-    }, [
+  }, [
+    workout.active,
+    workout.timerRunning,
+    workout.timerPhase,
     workout.timerLeft,
+    timerKey,
     appState.globalSettings,
     goToNextPass,
-    ]);
+  ]);
 
   function handleSkipRest() {
     if (hasCompletedRest.current) {
@@ -76,13 +139,21 @@ export default function RestScreen() {
         <View style={styles.card}>
           <View style={styles.heading}>
             <Text style={styles.title}>Rest</Text>
-            <Text style={styles.nextSet}>Next: Set {nextSet} of 5</Text>
+
+            <Text style={styles.nextSet}>
+              Next: Set {nextSet} of 5
+            </Text>
           </View>
 
           <View style={styles.timerSection}>
-            <Text style={styles.timer}>{workout.timerLeft}</Text>
-            <Text style={styles.secondsLabel}>seconds</Text>
-            <Text style={styles.message}>Get ready for the next set</Text>
+            <Text style={styles.timer}>
+              {formatTime(workout.timerLeft)}
+            </Text>
+
+
+            <Text style={styles.message}>
+              Get ready for the next set
+            </Text>
           </View>
 
           <View style={styles.actions}>
@@ -90,14 +161,18 @@ export default function RestScreen() {
               style={styles.skipButton}
               onPress={handleSkipRest}
             >
-              <Text style={styles.skipButtonText}>Skip Rest</Text>
+              <Text style={styles.skipButtonText}>
+                Skip Rest
+              </Text>
             </Pressable>
 
             <Pressable
               style={styles.abortButton}
               onPress={handleAbort}
             >
-              <Text style={styles.abortButtonText}>Abort Workout</Text>
+              <Text style={styles.abortButtonText}>
+                Abort Workout
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -111,13 +186,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0f172a",
   },
-
   container: {
     flex: 1,
     padding: 18,
     justifyContent: "center",
   },
-
   card: {
     minHeight: 520,
     borderRadius: 24,
@@ -127,52 +200,38 @@ const styles = StyleSheet.create({
     padding: 18,
     justifyContent: "space-between",
   },
-
   heading: {
     alignItems: "center",
   },
-
   title: {
     color: "#22d3ee",
     fontSize: 34,
     fontWeight: "900",
   },
-
   nextSet: {
     color: "#94a3b8",
     fontSize: 17,
     fontWeight: "700",
     marginTop: 6,
   },
-
   timerSection: {
     alignItems: "center",
   },
-
   timer: {
     color: "#f8fafc",
-    fontSize: 130,
-    lineHeight: 140,
+    fontSize: 86,
+    lineHeight: 96,
     fontWeight: "900",
   },
-
-  secondsLabel: {
-    color: "#94a3b8",
-    fontSize: 22,
-    marginBottom: 24,
-  },
-
   message: {
     color: "#f8fafc",
     fontSize: 21,
     fontWeight: "700",
     textAlign: "center",
   },
-
   actions: {
     gap: 10,
   },
-
   skipButton: {
     minHeight: 58,
     borderRadius: 16,
@@ -180,13 +239,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   skipButtonText: {
     color: "#082f49",
     fontSize: 19,
     fontWeight: "900",
   },
-
   abortButton: {
     minHeight: 54,
     borderRadius: 16,
@@ -196,7 +253,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   abortButtonText: {
     color: "#f8fafc",
     fontSize: 17,

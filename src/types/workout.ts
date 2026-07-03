@@ -74,6 +74,8 @@ export type WorkoutState = {
   restTime: number;
   progressModeActive: boolean;
   overtimeSeconds: number;
+  timerEndsAt: number | null;
+  progressStartedAt: number | null;
 };
 
 export type AppState = {

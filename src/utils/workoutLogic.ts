@@ -140,6 +140,8 @@ export function buildInitialState(): AppState {
       restTime: DEFAULT_REPS_REST,
       progressModeActive: false,
       overtimeSeconds: 0,
+      timerEndsAt: null,
+      progressStartedAt: null,
     },
   };
 }
@@ -491,7 +493,7 @@ export function getTimedMovement(
 }
 
 export function getPassNote(passNumber: number): string {
-  if (passNumber === 1) return "Warm-up / easy start";
+  if (passNumber === 1) return "Warm-up";
   if (passNumber === 2) return "First harder set";
   if (passNumber === 3) return "Middle set";
   if (passNumber === 4) return "Reduced load";

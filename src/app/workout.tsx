@@ -70,24 +70,26 @@ export default function WorkoutScreen() {
       <View style={styles.container}>
         <View style={styles.card}>
           <View style={styles.topRow}>
-            <Text style={styles.passTitle}>Set {currentPass}</Text>
+            <Text style={styles.exerciseName}>{selectedExercise}</Text>
             <Text style={styles.dots}>
               {"●".repeat(currentPass)}
               {"○".repeat(5 - currentPass)}
             </Text>
           </View>
 
-          <View style={styles.center}>
-            <Text style={styles.exerciseName}>{selectedExercise}</Text>
-              {exercise ? (
-                <Image
-                  source={EXERCISE_IMAGES[exercise.key]}
-                  style={styles.exerciseImage}
-                  resizeMode="contain"
-                />
-              ) : (
-                <Text style={styles.exerciseIcon}>•</Text>
-              )}
+          <View style={styles.center}>          
+            <Text style={styles.note}>
+              {isTimedWorkout ? getTimedNote() : getPassNote(currentPass)}
+            </Text>  
+            {exercise ? (
+              <Image
+                source={EXERCISE_IMAGES[exercise.key]}
+                style={styles.exerciseImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <Text style={styles.exerciseIcon}>•</Text>
+            )}
 
             {isBulgarianExercise ? (
               <View style={styles.bulgarianBlock}>
@@ -114,10 +116,7 @@ export default function WorkoutScreen() {
                 </Text>
               </>
             )}
-
-            <Text style={styles.note}>
-              {isTimedWorkout ? getTimedNote() : getPassNote(currentPass)}
-            </Text>
+           
           </View>
 
           <View style={styles.actions}>
@@ -159,11 +158,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  passTitle: {
-    color: "#f8fafc",
-    fontSize: 26,
-    fontWeight: "900",
-  },
   dots: {
     color: "#22d3ee",
     fontSize: 18,
@@ -173,10 +167,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   exerciseName: {
-    color: "#94a3b8",
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 18,
+    color: "#f8fafc",
+    fontSize: 26,
+    fontWeight: "900",
   },
   exerciseIcon: {
     fontSize: 64,
@@ -184,7 +177,7 @@ const styles = StyleSheet.create({
   },
   reps: {
     color: "#f8fafc",
-    fontSize: 120,
+    fontSize: 100,
     lineHeight: 128,
     fontWeight: "900",
   },
@@ -222,10 +215,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   note: {
-    color: "#f8fafc",
+    color: "#94a3b8",
     fontSize: 22,
     fontWeight: "700",
     textAlign: "center",
+    marginTop: 18,
   },
   actions: {
     gap: 10,
@@ -258,7 +252,6 @@ const styles = StyleSheet.create({
   },
   exerciseImage: {
     width: "100%",
-    height: 160,
-    marginBottom: 20,
+    height: 200,
   },
 });
