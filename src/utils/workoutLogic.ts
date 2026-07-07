@@ -3,6 +3,7 @@ import {
   DifficultyLevel,
   ExerciseSettings,
   RepsExerciseSettings,
+  RepsTempo,
   TimedExerciseSettings,
 } from "../types/workout";
 
@@ -38,7 +39,41 @@ export const LEVEL_ADJUSTMENTS: Record<DifficultyLevel, number> = {
   5: 10,
 };
 
+export const AUTO_COUNTER_TEMPO_OPTIONS: Array<{
+  value: RepsTempo;
+  label: string;
+  secondsPerRep: number;
+}> = [
+  {
+    value: "slow",
+    label: "Slow",
+    secondsPerRep: 3,
+  },
+  {
+    value: "medium",
+    label: "Medium",
+    secondsPerRep: 2,
+  },
+  {
+    value: "fast",
+    label: "Fast",
+    secondsPerRep: 1.5,
+  },
+];
+
 export const PROGRESSION_THRESHOLD = 2;
+
+export function normalizeRepsTempo(value: unknown): RepsTempo {
+  if (
+    value === "slow" ||
+    value === "medium" ||
+    value === "fast"
+  ) {
+    return value;
+  }
+
+  return "medium";
+}
 
 export function buildInitialSettings(): AppState["settings"] {
   const settings: AppState["settings"] = {};
@@ -51,6 +86,9 @@ export function buildInitialSettings(): AppState["settings"] {
         restTime: "",
         history: [],
         progressPoints: 0,
+        hasSeenInfo: false,
+        autoCounterEnabled: false,
+        autoCounterTempo: "medium",
       };
     } else if (exercise.mode === "custom_timer") {
       settings[exercise.key] = {
@@ -66,6 +104,7 @@ export function buildInitialSettings(): AppState["settings"] {
         restTime: "",
         history: [],
         progressPoints: 0,
+        hasSeenInfo: false,
       };
     }
   }
@@ -94,6 +133,9 @@ export function buildInitialSettingsForExercise(
       restTime: "",
       history: [],
       progressPoints: 0,
+      hasSeenInfo: false,
+      autoCounterEnabled: false,
+      autoCounterTempo: "medium",
     };
   }
 
@@ -112,6 +154,7 @@ export function buildInitialSettingsForExercise(
     restTime: "",
     history: [],
     progressPoints: 0,
+    hasSeenInfo: false,
   };
 }
 
@@ -196,6 +239,16 @@ export function migrateAppState(
             Math.trunc(storedProgressPoints)
           )
         ),
+        hasSeenInfo:
+          typeof settings.hasSeenInfo === "boolean"
+            ? settings.hasSeenInfo
+            : Array.isArray(settings.history) &&
+              settings.history.length > 0,
+        autoCounterEnabled:
+          legacySettings.autoCounterEnabled === true,
+        autoCounterTempo: normalizeRepsTempo(
+          legacySettings.autoCounterTempo
+        ),
       };
 
       continue;
@@ -263,6 +316,11 @@ export function migrateAppState(
             Math.trunc(storedProgressPoints)
           )
         ),
+        hasSeenInfo:
+          typeof settings.hasSeenInfo === "boolean"
+            ? settings.hasSeenInfo
+            : Array.isArray(settings.history) &&
+              settings.history.length > 0,
       };
 
       continue;

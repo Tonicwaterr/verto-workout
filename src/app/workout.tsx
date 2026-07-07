@@ -26,32 +26,12 @@ export default function WorkoutScreen() {
   const currentValue = workout.plan[currentPass - 1] ?? 0;
 
   const exercise = EXERCISES.find((item) => item.key === selectedExercise);
-  const isTimedWorkout = workout.workoutMode === "timed";
   const isBulgarianExercise = exercise?.mode === "bulgarian";
 
-  function getTimedNote() {
-    if (selectedExercise === "Plank") {
-      return currentPass % 2 === 0 ? "Side plank" : "Front plank";
-    }
-
-    if (selectedExercise === "Superman") {
-      return "Superman hold";
-    }
-
-    if (selectedExercise === "Mountain Climbers") {
-      return "Mountain climbers";
-    }
-
-    return "Timed set";
-  }
+  
 
   function handleDone() {
-    if (currentPass >= 5) {
-      if (isTimedWorkout) {
-        router.push("/finish");
-        return;
-      }
-
+    if (currentPass >= 5) {      
       router.push("/result");
       return;
     }
@@ -79,7 +59,7 @@ export default function WorkoutScreen() {
 
           <View style={styles.center}>          
             <Text style={styles.note}>
-              {isTimedWorkout ? getTimedNote() : getPassNote(currentPass)}
+              {getPassNote(currentPass)}
             </Text>  
             {exercise ? (
               <Image
@@ -112,7 +92,7 @@ export default function WorkoutScreen() {
                 <Text style={styles.reps}>{currentValue}</Text>
 
                 <Text style={styles.label}>
-                  {isTimedWorkout ? "seconds" : "reps"}
+                  reps
                 </Text>
               </>
             )}

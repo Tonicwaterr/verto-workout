@@ -29,6 +29,9 @@ export type RepsExerciseSettings = {
   restTime: string;
   history: WorkoutHistoryItem[];
   progressPoints: number;
+  hasSeenInfo: boolean;
+  autoCounterEnabled: boolean;
+  autoCounterTempo: RepsTempo;
 };
 
 export type TimedExerciseSettings = {
@@ -37,6 +40,7 @@ export type TimedExerciseSettings = {
   restTime: string;
   history: WorkoutHistoryItem[];
   progressPoints: number;
+  hasSeenInfo: boolean;
 };
 
 export type CustomTimerSettings = {
@@ -60,6 +64,8 @@ export type GlobalSettings = {
 };
 
 export type WorkoutMode = "reps" | "timed" | "interval";
+
+export type RepsTempo = "slow" | "medium" | "fast";
 
 export type WorkoutState = {
   active: boolean;

@@ -1,16 +1,21 @@
 import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Image,
   Keyboard,
   Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TextInputProps,
   TouchableWithoutFeedback,
   View,
+  useWindowDimensions,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,6 +23,7 @@ import { EXERCISE_IMAGES } from "../data/exerciseImages";
 import { EXERCISES } from "../data/exercises";
 import { useWorkoutStore } from "../store/workoutStore";
 import {
+  AUTO_COUNTER_TEMPO_OPTIONS,
   DEFAULT_REPS_REST,
   DEFAULT_TIMED_REST,
   DEFAULT_TIMED_WORK,
@@ -27,8 +33,39 @@ import {
   isRepsSettings,
   isTimedSettings,
   normalizeDifficultyLevel,
+  normalizeRepsTempo,
   roundToNearestFive,
 } from "../utils/workoutLogic";
+
+import type { RepsTempo } from "../types/workout";
+
+function SwipeSafeTextInput(props: TextInputProps) {
+  const inputRef = useRef<TextInput | null>(null);
+  const [isEditable, setIsEditable] = useState(false);
+
+  function handlePress() {
+    setIsEditable(true);
+
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }
+
+  return (
+    <Pressable onPress={handlePress}>
+      <TextInput
+        {...props}
+        ref={inputRef}
+        editable={isEditable}
+        pointerEvents={isEditable ? "auto" : "none"}
+        onBlur={(event) => {
+          setIsEditable(false);
+          props.onBlur?.(event);
+        }}
+      />
+    </Pressable>
+  );
+}
 
 export default function ExerciseScreen() {
 
@@ -52,11 +89,23 @@ export default function ExerciseScreen() {
   const [isSettingsModalVisible, setIsSettingsModalVisible] =
     useState(false);
 
-  const [settingsModalStep, setSettingsModalStep] =
-    useState<1 | 2>(1);
+  const [settingsModalPage, setSettingsModalPage] =
+    useState<0 | 1>(0);
+
+  const modalScrollRef = useRef<ScrollView | null>(null);
+
+  const { width: windowWidth } = useWindowDimensions();
+
+  const modalCardWidth = Math.min(windowWidth - 24, 520);
+  const modalPageWidth = modalCardWidth - 32;
 
   const [draftMaxValue, setDraftMaxValue] = useState("");
   const [draftRestTime, setDraftRestTime] = useState("");
+
+  const [draftAutoCounterEnabled, setDraftAutoCounterEnabled] =
+    useState(false);
+  const [draftAutoCounterTempo, setDraftAutoCounterTempo] =
+    useState<RepsTempo>("medium");
 
   const isRepsExercise =
     exercise.mode === "reps" ||
@@ -73,6 +122,9 @@ export default function ExerciseScreen() {
   const isBulgarianExercise =
     exercise.mode === "bulgarian";
 
+  const supportsAutoCounter =
+    exercise.mode === "reps";
+  
   const isCustomTimer =
     exercise.mode === "custom_timer";
 
@@ -150,6 +202,27 @@ export default function ExerciseScreen() {
     !isConfigurableExercise ||
     configuredMaxValue.trim().length > 0;
   
+  function scrollToModalPage(page: 0 | 1, animated = true) {
+    setSettingsModalPage(page);
+
+    requestAnimationFrame(() => {
+      modalScrollRef.current?.scrollTo({
+        x: modalPageWidth * page,
+        animated,
+      });
+    });
+  }
+
+  function handleModalScrollEnd(
+    event: NativeSyntheticEvent<NativeScrollEvent>
+  ) {
+    const nextPage = Math.round(
+      event.nativeEvent.contentOffset.x / modalPageWidth
+    ) as 0 | 1;
+
+    setSettingsModalPage(nextPage);
+  } 
+
   useEffect(() => {
     if (
       !isConfigurableExercise ||
@@ -160,13 +233,41 @@ export default function ExerciseScreen() {
 
     setDraftMaxValue(configuredMaxValue);
     setDraftRestTime(restTimeValue);
-    setSettingsModalStep(1);
+    if (isRepsSettings(settings)) {
+      setDraftAutoCounterEnabled(
+        settings.autoCounterEnabled
+      );
+      setDraftAutoCounterTempo(
+        normalizeRepsTempo(settings.autoCounterTempo)
+      );
+    } else {
+      setDraftAutoCounterEnabled(false);
+      setDraftAutoCounterTempo("medium");
+    }
+    setSettingsModalPage(0);
     setIsSettingsModalVisible(true);
   }, [
     selectedExercise,
     isConfigurableExercise,
     configuredMaxValue,
     restTimeValue,
+  ]);
+
+  useEffect(() => {
+    if (!isSettingsModalVisible) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      modalScrollRef.current?.scrollTo({
+        x: modalPageWidth * settingsModalPage,
+        animated: false,
+      });
+    });
+  }, [
+    isSettingsModalVisible,
+    modalPageWidth,
+    settingsModalPage,
   ]);
   
   function openSettingsModal() {
@@ -185,7 +286,28 @@ export default function ExerciseScreen() {
     );
 
     setDraftRestTime(settings.restTime);
-    setSettingsModalStep(1);
+
+    if (isRepsSettings(settings)) {
+      setDraftAutoCounterEnabled(
+        settings.autoCounterEnabled
+      );
+      setDraftAutoCounterTempo(
+        normalizeRepsTempo(settings.autoCounterTempo)
+      );
+    } else {
+      setDraftAutoCounterEnabled(false);
+      setDraftAutoCounterTempo("medium");
+    }
+
+    /*
+    * If this is the first setup, show Info first.
+    * Later, the Settings button should open Settings first.
+    */
+    const shouldShowInfoFirst =
+      !hasConfiguredExercise ||
+      !settings.hasSeenInfo;
+
+    setSettingsModalPage(shouldShowInfoFirst ? 0 : 1);
     setIsSettingsModalVisible(true);
   }
 
@@ -195,7 +317,6 @@ export default function ExerciseScreen() {
     }
 
     setIsSettingsModalVisible(false);
-    setSettingsModalStep(1);
     Keyboard.dismiss();
   }
 
@@ -258,6 +379,13 @@ export default function ExerciseScreen() {
         progressPoints: estimatedMaxChanged
           ? 0
           : settings.progressPoints,
+        hasSeenInfo: true,
+        autoCounterEnabled:
+          supportsAutoCounter &&
+          draftAutoCounterEnabled,
+        autoCounterTempo: normalizeRepsTempo(
+          draftAutoCounterTempo
+        ),
       });
     } else if (isTimedSettings(settings)) {
       const nextMaxSeconds =
@@ -278,13 +406,13 @@ export default function ExerciseScreen() {
         progressPoints: estimatedMaxChanged
           ? 0
           : settings.progressPoints,
+        hasSeenInfo: true,
       });
     } else {
       return;
     }
 
     setIsSettingsModalVisible(false);
-    setSettingsModalStep(1);
     Keyboard.dismiss();
   }
 
@@ -387,7 +515,11 @@ export default function ExerciseScreen() {
         {
           text: "Reset",
           style: "destructive",
-          onPress: resetCurrentExercise,
+          onPress: () => {
+            resetCurrentExercise();
+            setIsSettingsModalVisible(false);
+            Keyboard.dismiss();
+          },
         },
       ]
     );
@@ -410,40 +542,7 @@ export default function ExerciseScreen() {
             
 
             {isConfigurableExercise ? (
-              <>
-                <View style={styles.settingsSummary}>
-                  <View style={styles.settingsSummaryText}>
-                    <Text style={styles.settingsSummaryTitle}>
-                      Exercise settings
-                    </Text>
-
-                    <Text style={styles.settingsSummaryValue}>
-                      {hasConfiguredExercise
-                        ? isRepsExercise
-                          ? `Estimated max: ${maxRepsValue}${
-                              isBulgarianExercise
-                                ? " per leg"
-                                : " reps"
-                            }  •  Rest: ${
-                              restTimeValue ||
-                              DEFAULT_REPS_REST
-                            } sec`
-                          : `Estimated max: ${estimatedMaxSecondsValue} sec  •  Rest: ${
-                              restTimeValue ||
-                              DEFAULT_TIMED_REST
-                            } sec`
-                        : "Setup required"}
-                    </Text>
-                  </View>
-
-                  <Pressable
-                    style={styles.editSettingsButton}
-                    onPress={openSettingsModal}
-                  >
-                    <Text style={styles.editSettingsButtonText}>Edit</Text>
-                  </Pressable>
-                </View>
-
+              <>               
                 <View style={styles.field}>
                   <Text style={styles.label}>Difficulty</Text>
 
@@ -551,9 +650,16 @@ export default function ExerciseScreen() {
               <Text style={styles.continueButtonText}>Continue</Text>
             </Pressable>
 
-            <Pressable style={styles.secondaryButton} onPress={handleResetExercise}>
-              <Text style={styles.secondaryButtonText}>Reset Exercise</Text>
-            </Pressable>
+            {isConfigurableExercise && (
+              <Pressable
+                style={styles.secondaryButton}
+                onPress={openSettingsModal}
+              >
+                <Text style={styles.secondaryButtonText}>
+                  Settings
+                </Text>
+              </Pressable>
+            )}
           
         </View>
 
@@ -564,50 +670,137 @@ export default function ExerciseScreen() {
           statusBarTranslucent
           onRequestClose={closeSettingsModal}
         >
-          <TouchableWithoutFeedback
-            onPress={Keyboard.dismiss}
-            accessible={false}
-          >
-            <View style={styles.modalBackdrop}>
-              <View style={styles.modalCard}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalStep}>
-                    Step {settingsModalStep} of 2
-                  </Text>
-
-                  {hasConfiguredExercise && (
-                    <Pressable
-                      style={styles.modalCloseButton}
-                      onPress={closeSettingsModal}
+          <View style={styles.modalBackdrop}>
+            <View
+              style={[
+                styles.modalCard,
+                { width: modalCardWidth },
+              ]}
+            >
+              <View style={styles.modalHeader}>
+                <View style={styles.modalTabs}>
+                  <Pressable
+                    style={[
+                      styles.modalTab,
+                      settingsModalPage === 0 &&
+                        styles.modalTabSelected,
+                    ]}
+                    onPress={() => scrollToModalPage(0)}
+                  >
+                    <Text
+                      style={[
+                        styles.modalTabText,
+                        settingsModalPage === 0 &&
+                          styles.modalTabTextSelected,
+                      ]}
                     >
-                      <Text style={styles.modalCloseButtonText}>✕</Text>
-                    </Pressable>
-                  )}
+                      Info
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[
+                      styles.modalTab,
+                      settingsModalPage === 1 &&
+                        styles.modalTabSelected,
+                    ]}
+                    onPress={() => scrollToModalPage(1)}
+                  >
+                    <Text
+                      style={[
+                        styles.modalTabText,
+                        settingsModalPage === 1 &&
+                          styles.modalTabTextSelected,
+                      ]}
+                    >
+                      Settings
+                    </Text>
+                  </Pressable>
                 </View>
 
-                {settingsModalStep === 1 ? (
-                  <>
-                    <View style={styles.modalIntroduction}>
+                {hasConfiguredExercise && (
+                  <Pressable
+                    style={styles.modalCloseButton}
+                    onPress={closeSettingsModal}
+                  >
+                    <Text style={styles.modalCloseButtonText}>
+                      ✕
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+
+              <ScrollView
+                ref={modalScrollRef}
+                horizontal
+                pagingEnabled
+                bounces
+                alwaysBounceHorizontal
+                canCancelContentTouches
+                directionalLockEnabled
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                snapToInterval={modalPageWidth}
+                decelerationRate="fast"
+                disableIntervalMomentum
+                onMomentumScrollEnd={handleModalScrollEnd}
+                scrollEventThrottle={16}
+                style={[
+                  styles.modalPager,
+                  { width: modalPageWidth },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.modalPage,
+                    { width: modalPageWidth },
+                  ]}
+                >
+                  <ScrollView
+                    style={styles.modalPageScroll}
+                    contentContainerStyle={styles.modalPageScrollContent}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    <View style={styles.modalInfoContent}>
                       <Text style={styles.modalExerciseTitle}>
                         {exercise.key}
+                      </Text>
+
+                      <Text style={styles.modalInfoText}>
+                        {getExerciseInfoText(exercise.key)}
+                      </Text>
+
+                      <Text style={styles.modalSwipeHint}>
+                        Swipe to settings
                       </Text>
                     </View>
 
                     <Pressable
-                      style={styles.modalPrimaryButton}
-                      onPress={() => setSettingsModalStep(2)}
+                      style={styles.modalSaveButton}
+                      onPress={saveExerciseSettings}
                     >
-                      <Text style={styles.modalPrimaryButtonText}>
-                        Next
+                      <Text style={styles.modalSaveButtonText}>
+                        Done
                       </Text>
                     </Pressable>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.modalContent}>
-                      <Text style={styles.modalTitle}>
-                        Exercise Settings
-                      </Text>
+                  </ScrollView>
+                </View>
+
+                <View
+                  style={[
+                    styles.modalPage,
+                    { width: modalPageWidth },
+                  ]}
+                >
+                  <ScrollView
+                    style={styles.modalPageScroll}
+                    contentContainerStyle={styles.modalPageScrollContent}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    <View style={styles.modalContent}>                     
 
                       <View style={styles.modalField}>
                         <Text style={styles.label}>
@@ -618,7 +811,7 @@ export default function ExerciseScreen() {
                               : "Estimated max reps"}
                         </Text>
 
-                        <TextInput
+                        <SwipeSafeTextInput
                           value={draftMaxValue}
                           onChangeText={setDraftMaxValue}
                           keyboardType="number-pad"
@@ -637,7 +830,7 @@ export default function ExerciseScreen() {
                           Rest between sets
                         </Text>
 
-                        <TextInput
+                        <SwipeSafeTextInput
                           value={draftRestTime}
                           onChangeText={setDraftRestTime}
                           keyboardType="number-pad"
@@ -650,36 +843,166 @@ export default function ExerciseScreen() {
                           style={styles.input}
                         />
                       </View>
+
+                      {supportsAutoCounter && (
+                        <View style={styles.modalField}>
+                          
+                            <View style={styles.autoCounterTopRow}>
+                              <Text style={styles.autoCounterTitle}>
+                                Auto-counter
+                              </Text>
+
+                              <Pressable
+                                style={[
+                                  styles.toggleButton,
+                                  draftAutoCounterEnabled &&
+                                    styles.toggleButtonSelected,
+                                ]}
+                                onPress={() =>
+                                  setDraftAutoCounterEnabled(
+                                    (currentValue) => !currentValue
+                                  )
+                                }
+                              >
+                                <Text
+                                  style={[
+                                    styles.toggleButtonText,
+                                    draftAutoCounterEnabled &&
+                                      styles.toggleButtonTextSelected,
+                                  ]}
+                                >
+                                  {draftAutoCounterEnabled ? "On" : "Off"}
+                                </Text>
+                              </Pressable>
+                            </View>
+
+                            <Text style={styles.settingDescription}>
+                              Count reps automatically using a steady tempo.
+                            </Text>
+
+                            {draftAutoCounterEnabled && (
+                              <View style={styles.tempoSection}>
+                                <Text style={styles.label}>
+                                  Tempo
+                                </Text>
+
+                                <View style={styles.tempoRow}>
+                                  {AUTO_COUNTER_TEMPO_OPTIONS.map((option) => {
+                                    const isSelected =
+                                      draftAutoCounterTempo === option.value;
+
+                                    return (
+                                      <Pressable
+                                        key={option.value}
+                                        style={[
+                                          styles.tempoButton,
+                                          isSelected &&
+                                            styles.tempoButtonSelected,
+                                        ]}
+                                        onPress={() =>
+                                          setDraftAutoCounterTempo(option.value)
+                                        }
+                                      >
+                                        <Text
+                                          style={[
+                                            styles.tempoButtonText,
+                                            isSelected &&
+                                              styles.tempoButtonTextSelected,
+                                          ]}
+                                        >
+                                          {option.label}
+                                        </Text>
+
+                                        <Text
+                                          style={[
+                                            styles.tempoButtonSubtext,
+                                            isSelected &&
+                                              styles.tempoButtonSubtextSelected,
+                                          ]}
+                                        >
+                                          {option.secondsPerRep}s/rep
+                                        </Text>
+                                      </Pressable>
+                                    );
+                                  })}
+                                </View>
+                              </View>
+                            )}
+                          
+                        </View>
+                      )}
+
+                      
                     </View>
 
-                    <View style={styles.modalActions}>
-                      <Pressable
-                        style={styles.modalBackButton}
-                        onPress={() => setSettingsModalStep(1)}
-                      >
-                        <Text style={styles.modalBackButtonText}>
-                          Back
-                        </Text>
-                      </Pressable>
+                    {hasConfiguredExercise && (
+                        <Pressable
+                          style={styles.modalResetButton}
+                          onPress={handleResetExercise}
+                        >
+                          <Text style={styles.modalResetButtonText}>
+                            Reset Exercise
+                          </Text>
+                        </Pressable>
+                      )}
 
-                      <Pressable
-                        style={styles.modalSaveButton}
-                        onPress={saveExerciseSettings}
-                      >
-                        <Text style={styles.modalSaveButtonText}>
-                          Save
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </>
-                )}
-              </View>
+                    <Pressable
+                      style={styles.modalSaveButton}
+                      onPress={saveExerciseSettings}
+                    >
+                      <Text style={styles.modalSaveButtonText}>
+                        Done
+                      </Text>
+                    </Pressable>
+                  </ScrollView>
+                </View>
+              </ScrollView>
             </View>
-          </TouchableWithoutFeedback>
+          </View>
         </Modal>
       </SafeAreaView>
     </TouchableWithoutFeedback>
   );
+}
+
+function getExerciseInfoText(exerciseKey: string) {
+  if (exerciseKey === "Push-ups") {
+    return "Build upper-body pushing strength. Keep your body straight, lower with control, and stop before your form breaks.";
+  }
+
+  if (exerciseKey === "Pull-ups") {
+    return "Build pulling strength. Start from a controlled hang, pull until your chin clears the bar, and lower with control.";
+  }
+
+  if (exerciseKey === "Sit-ups") {
+    return "Train your core with controlled repetitions. Avoid rushing and try to keep the movement smooth.";
+  }
+
+  if (exerciseKey === "Squats") {
+    return "Build leg strength. Keep your chest up, control the descent, and press through your feet as you stand.";
+  }
+
+  if (exerciseKey === "Dumbbell Curls") {
+    return "Train your arms with controlled curls. Keep your elbows stable and avoid swinging the weight.";
+  }
+
+  if (exerciseKey === "Bulgarian Squats") {
+    return "Train one leg at a time. Keep the movement controlled and use the same target for both legs.";
+  }
+
+  if (exerciseKey === "Plank") {
+    return "Build core endurance. This workout alternates front plank with left and right side plank variations.";
+  }
+
+  if (exerciseKey === "Superman") {
+    return "Train your lower back and posterior chain. Lift with control and avoid forcing the movement.";
+  }
+
+  if (exerciseKey === "Mountain Climbers") {
+    return "Train conditioning and core control. Keep a steady rhythm and avoid letting your hips rise too high.";
+  }
+
+  return "Review the exercise settings before starting your workout.";
 }
 
 const styles = StyleSheet.create({
@@ -813,67 +1136,25 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 300,
   },
-  settingsSummary: {
-    minHeight: 64,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  settingsSummaryText: {
-    flex: 1,
-  },
-  settingsSummaryTitle: {
-    color: "#f8fafc",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  settingsSummaryValue: {
-    color: "#94a3b8",
-    fontSize: 12,
-    marginTop: 4,
-  },
-  editSettingsButton: {
-    minWidth: 58,
-    minHeight: 38,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#22d3ee",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-  },
-  editSettingsButtonText: {
-    color: "#22d3ee",
-    fontSize: 14,
-    fontWeight: "800",
-  },
 
   /* Settings modal */
-  
+
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(2,6,23,0.82)",
-    padding: 20,
+    padding: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   modalCard: {
-    width: "100%",
-    maxWidth: 460,
-    minHeight: 360,
+    maxWidth: 520,
+    minHeight: 600,
+    maxHeight: "92%",
     borderRadius: 24,
     backgroundColor: "#172033",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
-    padding: 20,
+    padding: 16,
     justifyContent: "space-between",
   },
   modalHeader: {
@@ -881,11 +1162,33 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginBottom: 14,
   },
-  modalStep: {
-    color: "#64748b",
+  modalTabs: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  modalTab: {
+    minHeight: 36,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+  modalTabSelected: {
+    backgroundColor: "rgba(34,211,238,0.16)",
+    borderColor: "#22d3ee",
+  },
+  modalTabText: {
+    color: "#94a3b8",
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "800",
+  },
+  modalTabTextSelected: {
+    color: "#22d3ee",
   },
   modalCloseButton: {
     width: 38,
@@ -900,20 +1203,48 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "900",
   },
-  modalIntroduction: {
+  modalPager: {
+    flex: 1,
+    alignSelf: "center",
+  },
+  modalPage: {
+    flex: 1,
+  },
+  modalPageScroll: {
+    flex: 1,
+  },
+  modalPageScrollContent: {
+    flexGrow: 1,
+    justifyContent: "space-between",
+    paddingBottom: 2,
+  },
+  modalInfoContent: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 32,
+    paddingVertical: 24,
+  },
+  modalContent: {
+    flex: 1,
   },
   modalExerciseTitle: {
     color: "#f8fafc",
     fontSize: 34,
     fontWeight: "900",
     textAlign: "center",
+    marginBottom: 18,
   },
-  modalContent: {
-    flex: 1,
+  modalInfoText: {
+    color: "#cbd5e1",
+    fontSize: 17,
+    lineHeight: 24,
+    textAlign: "center",
+  },
+  modalSwipeHint: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 22,
   },
   modalTitle: {
     color: "#f8fafc",
@@ -924,49 +1255,111 @@ const styles = StyleSheet.create({
   modalField: {
     marginBottom: 16,
   },
-  modalPrimaryButton: {
-    minHeight: 54,
-    borderRadius: 16,
-    backgroundColor: "#22d3ee",
+  modalResetButton: {
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: "rgba(245,158,11,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.35)",
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 8,
   },
-  modalPrimaryButtonText: {
-    color: "#082f49",
-    fontSize: 18,
+  modalResetButtonText: {
+    color: "#f59e0b",
+    fontSize: 16,
     fontWeight: "900",
   },
-  modalActions: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 10,
-  },
-  modalBackButton: {
-    flex: 1,
-    minHeight: 52,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.07)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalBackButtonText: {
-    color: "#f8fafc",
-    fontSize: 17,
-    fontWeight: "800",
-  },
   modalSaveButton: {
-    flex: 1,
     minHeight: 52,
     borderRadius: 16,
     backgroundColor: "#22d3ee",
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 14,
   },
   modalSaveButtonText: {
     color: "#082f49",
     fontSize: 17,
     fontWeight: "900",
+  },
+  autoCounterTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 16,
+  },
+  autoCounterTitle: {
+    color: "#f8fafc",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  settingDescription: {
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  toggleButton: {
+    minWidth: 72,
+    minHeight: 40,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toggleButtonSelected: {
+    backgroundColor: "rgba(34,211,238,0.16)",
+    borderColor: "#22d3ee",
+  },
+  toggleButtonText: {
+    color: "#cbd5e1",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  toggleButtonTextSelected: {
+    color: "#22d3ee",
+  },
+  tempoSection: {
+    marginTop: 14,
+  },
+  tempoRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  tempoButton: {
+    flex: 1,
+    minHeight: 60,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  tempoButtonSelected: {
+    backgroundColor: "rgba(34,211,238,0.16)",
+    borderColor: "#22d3ee",
+  },
+  tempoButtonText: {
+    color: "#cbd5e1",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  tempoButtonTextSelected: {
+    color: "#22d3ee",
+  },
+  tempoButtonSubtext: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  tempoButtonSubtextSelected: {
+    color: "#94e8f5",
   },
 });
