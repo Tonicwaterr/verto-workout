@@ -22,6 +22,7 @@ import {
   buildInitialState,
   calculateProgressionUpdate,
   calculateTimedProgressionUpdate,
+  getAutoCounterMaxReps,
   getMovement,
   getTimedMovement,
   isProgressionEnabled,
@@ -29,6 +30,7 @@ import {
   isTimedSettings,
   migrateAppState,
   roundToNearestFive,
+  TIMED_PROGRESS_EXTRA_LIMIT_SECONDS,
 } from "../utils/workoutLogic";
 
 type WorkoutStore = {
@@ -37,7 +39,14 @@ type WorkoutStore = {
   setSelectedExercise: (exerciseKey: string) => void;
   getCurrentSettings: () => ExerciseSettings;
   updateCurrentSettings: (updates: Partial<ExerciseSettings>) => void;
-  startRepsWorkout: (plan: number[], restTime: number) => void;
+  startRepsWorkout: (
+    plan: number[],
+    restTime: number,
+    autoCounterConfig?: {
+      enabled: boolean;
+      tempoSeconds: number;
+    }
+  ) => void;
   startTimedWorkout: (
     planOrWorkTime: number[] | number,
     restTime: number
@@ -55,6 +64,9 @@ type WorkoutStore = {
   stopTimedFinalSet: () => void;
   toggleTimerPause: () => void;
   saveTimedWorkoutResult: () => void;
+  tickAutoCounter: () => void;
+  toggleAutoCounterPause: () => void;
+  stopAutoCounterFinalSet: () => void;
   setResultValue: (value: number) => void;
   saveRepsWorkoutResult: () => void;
   abortWorkout: () => void;
@@ -144,7 +156,27 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
     return Date.now() + Math.max(0, seconds) * 1000;
   }
 
-  function startRepsWorkout(plan: number[], restTime: number) {
+  function startRepsWorkout(
+    plan: number[],
+    restTime: number,
+    autoCounterConfig?: {
+      enabled: boolean;
+      tempoSeconds: number;
+    }
+  ) {
+    const autoCounterEnabled =
+      autoCounterConfig?.enabled === true;
+
+    const autoCounterTempoMs = Math.max(
+      500,
+      Math.round(
+        (autoCounterConfig?.tempoSeconds ?? 2) * 1000
+      )
+    );
+
+    const firstTarget =
+      plan[0] ?? 0;
+
     setAppState((currentState) => ({
       ...currentState,
       workout: {
@@ -163,6 +195,17 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         overtimeSeconds: 0,
         timerEndsAt: null,
         progressStartedAt: null,
+
+        autoCounterEnabled,
+        autoCounterValue: 0,
+        autoCounterTarget: firstTarget,
+        autoCounterMax: getAutoCounterMaxReps(firstTarget),
+        autoCounterTempoMs,
+        autoCounterRunning: autoCounterEnabled,
+        autoCounterNextRepAt: autoCounterEnabled
+          ? Date.now() + autoCounterTempoMs
+          : null,
+        autoCounterLimitReached: false,
       },
     }));
   }
@@ -238,20 +281,41 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
   }
 
   function goToNextPass() {
-    setAppState((currentState) => ({
-      ...currentState,
-      workout: {
-        ...currentState.workout,
-        currentPass: Math.min(
-          currentState.workout.currentPass + 1,
-          5
-        ),
-        timerRunning: false,
-        timerPhase: "work",
-        timerEndsAt: null,
-        progressStartedAt: null,
-      },
-    }));
+    setAppState((currentState) => {
+      const nextPass = Math.min(
+        currentState.workout.currentPass + 1,
+        5
+      );
+
+      const nextTarget =
+        currentState.workout.plan[nextPass - 1] ?? 0;
+
+      const shouldRunAutoCounter =
+        currentState.workout.workoutMode === "reps" &&
+        currentState.workout.autoCounterEnabled;
+
+      return {
+        ...currentState,
+        workout: {
+          ...currentState.workout,
+          currentPass: nextPass,
+          timerRunning: false,
+          timerPhase: "work",
+          timerEndsAt: null,
+          progressStartedAt: null,
+
+          autoCounterValue: 0,
+          autoCounterTarget: nextTarget,
+          autoCounterMax: getAutoCounterMaxReps(nextTarget),
+          autoCounterRunning: shouldRunAutoCounter,
+          autoCounterNextRepAt: shouldRunAutoCounter
+            ? Date.now() +
+              currentState.workout.autoCounterTempoMs
+            : null,
+          autoCounterLimitReached: false,
+        },
+      };
+    });
   }
 
   function tickTimer() {
@@ -271,15 +335,24 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
           return currentState;
         }
 
-        const nextOvertimeSeconds =
+        const rawOvertimeSeconds =
           Math.floor(
             (Date.now() - workout.progressStartedAt) /
               1000
           );
 
+        const nextOvertimeSeconds = Math.min(
+          TIMED_PROGRESS_EXTRA_LIMIT_SECONDS,
+          rawOvertimeSeconds
+        );
+
+        const hasReachedTimedProgressLimit =
+          nextOvertimeSeconds >=
+          TIMED_PROGRESS_EXTRA_LIMIT_SECONDS;
+
         if (
-          nextOvertimeSeconds ===
-          workout.overtimeSeconds
+          nextOvertimeSeconds === workout.overtimeSeconds &&
+          workout.timerRunning === !hasReachedTimedProgressLimit
         ) {
           return currentState;
         }
@@ -288,8 +361,11 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
           ...currentState,
           workout: {
             ...workout,
-            overtimeSeconds:
-              nextOvertimeSeconds,
+            overtimeSeconds: nextOvertimeSeconds,
+            timerRunning: !hasReachedTimedProgressLimit,
+            progressStartedAt: hasReachedTimedProgressLimit
+              ? null
+              : workout.progressStartedAt,
           },
         };
       }
@@ -320,6 +396,64 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  function tickAutoCounter() {
+    setAppState((currentState) => {
+      const workout = currentState.workout;
+
+      if (
+        !workout.active ||
+        workout.workoutMode !== "reps" ||
+        !workout.autoCounterEnabled ||
+        !workout.autoCounterRunning ||
+        workout.timerPhase !== "work" ||
+        !workout.autoCounterNextRepAt
+      ) {
+        return currentState;
+      }
+
+      const now = Date.now();
+
+      if (now < workout.autoCounterNextRepAt) {
+        return currentState;
+      }
+
+      const repsToAdd =
+        Math.floor(
+          (now - workout.autoCounterNextRepAt) /
+            workout.autoCounterTempoMs
+        ) + 1;
+
+      const nextAutoCounterValue = Math.min(
+        workout.autoCounterMax,
+        workout.autoCounterValue + repsToAdd
+      );
+
+      const limitReached =
+        nextAutoCounterValue >= workout.autoCounterMax;
+
+      if (
+        nextAutoCounterValue === workout.autoCounterValue &&
+        limitReached === workout.autoCounterLimitReached
+      ) {
+        return currentState;
+      }
+
+      return {
+        ...currentState,
+        workout: {
+          ...workout,
+          autoCounterValue: nextAutoCounterValue,
+          autoCounterRunning: !limitReached,
+          autoCounterNextRepAt: limitReached
+            ? null
+            : workout.autoCounterNextRepAt +
+              repsToAdd * workout.autoCounterTempoMs,
+          autoCounterLimitReached: limitReached,
+        },
+      };
+    });
+  }
+
   function startRestTimer() {
     setAppState((currentState) => {
       const restTime =
@@ -336,6 +470,8 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
           progressModeActive: false,
           overtimeSeconds: 0,
           progressStartedAt: null,
+          autoCounterRunning: false,
+          autoCounterNextRepAt: null,
         },
       };
     });
@@ -466,6 +602,13 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
       * Resume Progress Mode.
       */
       if (workout.progressModeActive) {
+        if (
+          workout.overtimeSeconds >=
+          TIMED_PROGRESS_EXTRA_LIMIT_SECONDS
+        ) {
+          return currentState;
+        }
+
         return {
           ...currentState,
           workout: {
@@ -488,6 +631,70 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
           timerRunning: true,
           timerEndsAt: getTimerEndTime(workout.timerLeft),
           progressStartedAt: null,
+        },
+      };
+    });
+  }
+
+  function toggleAutoCounterPause() {
+    setAppState((currentState) => {
+      const workout = currentState.workout;
+
+      if (
+        !workout.active ||
+        workout.workoutMode !== "reps" ||
+        !workout.autoCounterEnabled ||
+        workout.timerPhase !== "work" ||
+        workout.autoCounterLimitReached
+      ) {
+        return currentState;
+      }
+
+      if (workout.autoCounterRunning) {
+        return {
+          ...currentState,
+          workout: {
+            ...workout,
+            autoCounterRunning: false,
+            autoCounterNextRepAt: null,
+          },
+        };
+      }
+
+      return {
+        ...currentState,
+        workout: {
+          ...workout,
+          autoCounterRunning: true,
+          autoCounterNextRepAt:
+            Date.now() + workout.autoCounterTempoMs,
+        },
+      };
+    });
+  }
+
+  function stopAutoCounterFinalSet() {
+    setAppState((currentState) => {
+      const workout = currentState.workout;
+
+      if (
+        !workout.active ||
+        workout.workoutMode !== "reps" ||
+        !workout.autoCounterEnabled
+      ) {
+        return currentState;
+      }
+
+      return {
+        ...currentState,
+        workout: {
+          ...workout,
+          resultValue: Math.max(
+            workout.autoCounterValue,
+            workout.autoCounterTarget
+          ),
+          autoCounterRunning: false,
+          autoCounterNextRepAt: null,
         },
       };
     });
@@ -631,6 +838,14 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
                   ? `Estimated max reduced to ${nextMaxReps}.`
                   : "Estimated max unchanged.",
           plan: [],
+          autoCounterEnabled: false,
+          autoCounterValue: 0,
+          autoCounterTarget: 0,
+          autoCounterMax: 0,
+          autoCounterTempoMs: 2000,
+          autoCounterRunning: false,
+          autoCounterNextRepAt: null,
+          autoCounterLimitReached: false,
         },
       };
     });
@@ -764,6 +979,14 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
           overtimeSeconds: 0,
           timerEndsAt: null,
           progressStartedAt: null,
+          autoCounterEnabled: false,
+          autoCounterValue: 0,
+          autoCounterTarget: 0,
+          autoCounterMax: 0,
+          autoCounterTempoMs: 2000,
+          autoCounterRunning: false,
+          autoCounterNextRepAt: null,
+          autoCounterLimitReached: false,
         },
       };
     });
@@ -787,6 +1010,14 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
           overtimeSeconds: 0,
           timerEndsAt: null,
           progressStartedAt: null,
+          autoCounterEnabled: false,
+          autoCounterValue: 0,
+          autoCounterTarget: 0,
+          autoCounterMax: 0,
+          autoCounterTempoMs: 2000,
+          autoCounterRunning: false,
+          autoCounterNextRepAt: null,
+          autoCounterLimitReached: false,
         },
     }));
   }
@@ -824,6 +1055,14 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
           overtimeSeconds: 0,
           timerEndsAt: null,
           progressStartedAt: null,
+          autoCounterEnabled: false,
+          autoCounterValue: 0,
+          autoCounterTarget: 0,
+          autoCounterMax: 0,
+          autoCounterTempoMs: 2000,
+          autoCounterRunning: false,
+          autoCounterNextRepAt: null,
+          autoCounterLimitReached: false,
         },
       };
     });
@@ -890,6 +1129,9 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         enterTimedProgressMode,
         stopTimedFinalSet,
         toggleTimerPause,
+        tickAutoCounter,
+        toggleAutoCounterPause,
+        stopAutoCounterFinalSet,
         saveTimedWorkoutResult,
         setResultValue,
         saveRepsWorkoutResult,

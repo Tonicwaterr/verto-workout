@@ -60,3 +60,11 @@ export async function playFinishFeedback(settings: GlobalSettings) {
 
   await playBeep(settings);
 }
+
+export async function playRepTickFeedback(settings: GlobalSettings) {
+  await playBeep(settings);
+}
+
+export async function playTargetReachedFeedback(settings: GlobalSettings) {
+  await playTimerFeedback(settings);
+}

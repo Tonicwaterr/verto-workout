@@ -30,6 +30,7 @@ import {
   DIFFICULTY_OPTIONS,
   buildPlan,
   buildTimedPlan,
+  getSecondsPerRep,
   isRepsSettings,
   isTimedSettings,
   normalizeDifficultyLevel,
@@ -439,7 +440,19 @@ export default function ExerciseScreen() {
         level: normalizedLevel,
       });
 
-      startRepsWorkout(plan, parsedRestTime);
+      startRepsWorkout(
+        plan,
+        parsedRestTime,
+        {
+          enabled:
+            supportsAutoCounter &&
+            settings.autoCounterEnabled,
+          tempoSeconds: getSecondsPerRep(
+            settings.autoCounterTempo
+          ),
+        }
+      );
+
       router.push("/workout");
       return;
     }

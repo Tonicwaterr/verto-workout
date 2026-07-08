@@ -7,6 +7,8 @@ import {
   View,
 } from "react-native";
 
+import * as Application from "expo-application";
+import Constants from "expo-constants";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useWorkoutStore } from "../store/workoutStore";
 
@@ -14,7 +16,21 @@ export default function SettingsScreen() {
   const { appState, resetAllData, toggleBeep, toggleVibration } =
     useWorkoutStore();
 
-  function handleResetAllData() {
+  const appVersion =
+    Constants.appOwnership === "expo"
+      ? Constants.expoConfig?.version ?? "Dev"
+      : Application.nativeApplicationVersion ??
+        Constants.expoConfig?.version ??
+        "Dev";
+
+  const buildVersion =
+    Constants.appOwnership === "expo"
+      ? Constants.expoConfig?.ios?.buildNumber
+      : Application.nativeBuildVersion;
+
+  const displayedVersion = appVersion;
+  
+    function handleResetAllData() {
     Alert.alert(
       "Reset all data?",
       "This will delete all saved workouts, settings, and progress.",
@@ -80,7 +96,9 @@ export default function SettingsScreen() {
               <Text style={styles.settingsLabel}>App version</Text>
               <Text style={styles.settingsHelp}>Verto Workout</Text>
             </View>
-            <Text style={styles.settingsValue}>0.1</Text>
+            <Text style={styles.settingsValue}>
+              {displayedVersion}
+            </Text>
           </View>
 
           <View style={styles.divider} />

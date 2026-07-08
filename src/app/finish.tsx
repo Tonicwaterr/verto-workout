@@ -14,6 +14,7 @@ import {
   isProgressionEnabled,
   isTimedSettings,
   roundToNearestFive,
+  TIMED_PROGRESS_EXTRA_LIMIT_SECONDS,
 } from "../utils/workoutLogic";
 
 export default function FinishScreen() {
@@ -21,6 +22,7 @@ export default function FinishScreen() {
     appState,
     selectedExercise,
     getCurrentSettings,
+    setResultValue,
     saveTimedWorkoutResult,
     abortWorkout,
   } = useWorkoutStore();
@@ -37,6 +39,21 @@ export default function FinishScreen() {
 
   const actualFinalSet =
     workout.resultValue;
+
+  const performanceDifference =
+    actualFinalSet - plannedFinalSet;
+
+  const targetReferenceText =
+    performanceDifference > 0
+      ? `Target: ${plannedFinalSet} sec  •  Extra: +${performanceDifference} sec`
+      : performanceDifference < 0
+        ? `Target: ${plannedFinalSet} sec  •  ${Math.abs(
+            performanceDifference
+          )} sec below target`
+        : `Target: ${plannedFinalSet} sec  •  Target completed`;
+  
+    const maxAdjustableSeconds =
+    plannedFinalSet + TIMED_PROGRESS_EXTRA_LIMIT_SECONDS;
 
   const movement = isTimedWorkout
     ? getTimedMovement(
@@ -59,7 +76,7 @@ export default function FinishScreen() {
       ? isProgressionEnabled(settings.level)
       : false;
 
-  const progressionUpdate =
+  const progressionPreview =
     isTimedWorkout &&
     progressionEnabled
       ? calculateTimedProgressionUpdate(
@@ -77,34 +94,46 @@ export default function FinishScreen() {
           maxSecondsChange: 0,
         };
 
-  const performanceDifference =
-    actualFinalSet - plannedFinalSet;
+  function getFeedbackText() {
+    if (!isTimedWorkout) {
+      return "Workout complete.";
+    }
 
-  const performanceText =
-    performanceDifference > 0
-      ? `Target exceeded by ${performanceDifference} ${
-          performanceDifference === 1
-            ? "second"
-            : "seconds"
-        }`
-      : performanceDifference < 0
-        ? `Stopped ${Math.abs(
-            performanceDifference
-          )} ${
-            Math.abs(performanceDifference) === 1
-              ? "second"
-              : "seconds"
-          } before target`
-        : "Target completed";
+    if (!progressionEnabled) {
+      return "Light workouts support recovery and do not affect your progression.";
+    }
 
-  const estimateText =
-    !progressionEnabled
-      ? `Estimated max remains ${currentEstimatedMax} sec`
-      : progressionUpdate.maxSecondsChange > 0
-        ? `Estimated max: ${currentEstimatedMax} → ${progressionUpdate.nextMaxSeconds} sec`
-        : progressionUpdate.maxSecondsChange < 0
-          ? `Estimated max: ${currentEstimatedMax} → ${progressionUpdate.nextMaxSeconds} sec`
-          : `Estimated max remains ${currentEstimatedMax} sec`;
+    if (progressionPreview.maxSecondsChange > 0) {
+      return `Great result. Your estimated max will increase from ${currentEstimatedMax} to ${progressionPreview.nextMaxSeconds} seconds.`;
+    }
+
+    if (progressionPreview.maxSecondsChange < 0) {
+      return `Verto will adjust your estimated max from ${currentEstimatedMax} to ${progressionPreview.nextMaxSeconds} seconds.`;
+    }
+
+    if (movement > 0) {
+      return "Better than planned. This moves you closer to a higher estimated max.";
+    }
+
+    if (movement < 0) {
+      return "Lower than planned. Verto only reduces your estimate after repeated lower results.";
+    }
+
+    return "Close to planned. Your estimated max stays the same.";
+  }
+
+  function handleMinus() {
+    setResultValue(actualFinalSet - 1);
+  }
+
+  function handlePlus() {
+    setResultValue(
+      Math.min(
+        actualFinalSet + 1,
+        maxAdjustableSeconds
+      )
+    );
+  }
 
   function handleFinish() {
     if (isTimedWorkout) {
@@ -116,82 +145,92 @@ export default function FinishScreen() {
     router.replace("/");
   }
 
+  if (!isTimedWorkout) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.container}>
+          <View style={styles.card}>
+            <View>
+              <Text style={styles.title}>
+                Done!
+              </Text>
+
+              <Text style={styles.subtitle}>
+                Workout complete.
+              </Text>
+
+              <View style={styles.feedbackBox}>
+                <Text style={styles.feedbackText}>
+                  {getFeedbackText()}
+                </Text>
+              </View>
+            </View>
+
+            <Pressable
+              style={styles.doneButton}
+              onPress={handleFinish}
+            >
+              <Text style={styles.doneButtonText}>
+                Back to Home
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.container}>
         <View style={styles.card}>
           <View>
-            <Text style={styles.title}>
-              Done!
-            </Text>
+            <Text style={styles.title}>Set 5</Text>
+            <Text style={styles.subtitle}>{selectedExercise}</Text>
 
-            <Text style={styles.subtitle}>
-              {selectedExercise} complete.
-            </Text>
-          </View>
+            <View style={styles.adjustBlock}>
+              <View style={styles.adjustRow}>
+                <Pressable style={styles.adjustButton} onPress={handleMinus}>
+                  <Text style={styles.adjustButtonText}>−</Text>
+                </Pressable>
 
-          {isTimedWorkout && (
-            <View style={styles.resultSection}>
-              <View style={styles.resultRow}>
-                <View style={styles.resultColumn}>
-                  <Text style={styles.resultLabel}>
-                    Target
-                  </Text>
-
-                  <Text style={styles.resultValue}>
-                    {plannedFinalSet}
-                  </Text>
-
-                  <Text style={styles.resultUnit}>
-                    seconds
-                  </Text>
-                </View>
-
-                <View style={styles.divider} />
-
-                <View style={styles.resultColumn}>
-                  <Text style={styles.resultLabel}>
-                    Completed
-                  </Text>
-
+                <View style={styles.resultBox}>
                   <Text style={styles.resultValue}>
                     {actualFinalSet}
                   </Text>
 
-                  <Text style={styles.resultUnit}>
+                  <Text style={styles.resultLabel}>
                     seconds
                   </Text>
                 </View>
+
+                <Pressable style={styles.adjustButton} onPress={handlePlus}>
+                  <Text style={styles.adjustButtonText}>+</Text>
+                </Pressable>
               </View>
 
-              <View style={styles.progressSummary}>
-                <Text
-                  style={[
-                    styles.progressText,
-                    performanceDifference > 0 &&
-                      styles.progressPositive,
-                    performanceDifference < 0 &&
-                      styles.progressNegative,
-                  ]}
-                >
-                  {performanceText}
-                </Text>
-
-                <Text style={styles.estimateText}>
-                  {estimateText}
-                </Text>
-              </View>
+              <Text style={styles.targetReference}>
+                {targetReferenceText}
+              </Text>
             </View>
-          )}
+
+            <Text style={styles.helperText}>
+              Adjust the time you completed in the last set.
+            </Text>
+
+            <View style={styles.feedbackBox}>
+              <Text style={styles.feedbackText}>
+                {getFeedbackText()}
+              </Text>
+            </View>
+          </View>
 
           <Pressable
             style={styles.doneButton}
             onPress={handleFinish}
           >
             <Text style={styles.doneButtonText}>
-              {isTimedWorkout
-                ? "Save and Finish"
-                : "Back to Home"}
+              Done
             </Text>
           </Pressable>
         </View>
@@ -211,89 +250,97 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   card: {
-    minHeight: 460,
+    minHeight: 520,
     borderRadius: 24,
-    backgroundColor:
-      "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
-    borderColor:
-      "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255,255,255,0.12)",
     padding: 18,
     justifyContent: "space-between",
   },
   title: {
     color: "#f8fafc",
-    fontSize: 52,
+    fontSize: 34,
     fontWeight: "900",
     textAlign: "center",
-    marginBottom: 10,
+    marginBottom: 6,
   },
   subtitle: {
     color: "#94a3b8",
-    fontSize: 20,
+    fontSize: 18,
+    fontWeight: "700",
     textAlign: "center",
+    marginBottom: 30,
   },
-  resultSection: {
-    gap: 18,
+  adjustBlock: {
+    alignItems: "center",
+    marginBottom: 18,
   },
-  resultRow: {
-    minHeight: 150,
-    borderRadius: 20,
-    backgroundColor:
-      "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor:
-      "rgba(255,255,255,0.12)",
+  adjustRow: {
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 16,
+    gap: 14,
   },
-  resultColumn: {
-    flex: 1,
+  adjustButton: {
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
     alignItems: "center",
+    justifyContent: "center",
   },
-  resultLabel: {
-    color: "#94a3b8",
-    fontSize: 14,
-    fontWeight: "800",
-    marginBottom: 5,
+  adjustButtonText: {
+    color: "#f8fafc",
+    fontSize: 34,
+    fontWeight: "900",
+  },
+  resultBox: {
+    width: 130,
+    alignItems: "center",
   },
   resultValue: {
     color: "#f8fafc",
-    fontSize: 44,
+    fontSize: 86,
+    lineHeight: 96,
     fontWeight: "900",
   },
-  resultUnit: {
+  resultLabel: {
     color: "#94a3b8",
-    fontSize: 13,
+    fontSize: 18,
   },
-  divider: {
-    width: 1,
-    height: 80,
-    backgroundColor:
-      "rgba(255,255,255,0.14)",
-  },
-  progressSummary: {
-    alignItems: "center",
-  },
-  progressText: {
-    color: "#f8fafc",
-    fontSize: 19,
-    fontWeight: "900",
-    textAlign: "center",
-  },
-  progressPositive: {
-    color: "#34d399",
-  },
-  progressNegative: {
-    color: "#f59e0b",
-  },
-  estimateText: {
+  helperText: {
     color: "#94a3b8",
-    fontSize: 15,
+    fontSize: 17,
     textAlign: "center",
-    marginTop: 7,
+    marginBottom: 18,
+  },
+  feedbackBox: {
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    padding: 16,
+    minHeight: 62,
+    justifyContent: "center",
+  },
+  feedbackText: {
+    color: "#e2e8f0",
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  targetReference: {
+    color: "#94a3b8",
+    fontSize: 14,
+    fontWeight: "700",
+    textAlign: "center",
+    marginTop: 10,
+    minHeight: 20,
+    paddingHorizontal: 8,
   },
   doneButton: {
     minHeight: 58,
@@ -303,7 +350,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   doneButtonText: {
-    color: "#052e16",
+    color: "#082f49",
     fontSize: 20,
     fontWeight: "900",
   },

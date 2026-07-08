@@ -12,6 +12,7 @@ import { EXERCISES } from "../data/exercises";
 export const DEFAULT_REPS_REST = 90;
 export const DEFAULT_TIMED_WORK = 30;
 export const DEFAULT_TIMED_REST = 20;
+export const TIMED_PROGRESS_EXTRA_LIMIT_SECONDS = 30;
 
 export const BASE_PERCENTS = [40, 60, 50, 50, 60];
 
@@ -61,6 +62,36 @@ export const AUTO_COUNTER_TEMPO_OPTIONS: Array<{
   },
 ];
 
+export const AUTO_COUNTER_MIN_EXTRA_REPS = 10;
+export const AUTO_COUNTER_MAX_EXTRA_REPS = 30;
+
+export function getAutoCounterExtraLimit(targetReps: number) {
+  const safeTargetReps = Math.max(
+    1,
+    Math.round(targetReps)
+  );
+
+  return Math.min(
+    AUTO_COUNTER_MAX_EXTRA_REPS,
+    Math.max(
+      AUTO_COUNTER_MIN_EXTRA_REPS,
+      Math.ceil(safeTargetReps * 0.5)
+    )
+  );
+}
+
+export function getAutoCounterMaxReps(targetReps: number) {
+  const safeTargetReps = Math.max(
+    1,
+    Math.round(targetReps)
+  );
+
+  return (
+    safeTargetReps +
+    getAutoCounterExtraLimit(safeTargetReps)
+  );
+}
+
 export const PROGRESSION_THRESHOLD = 2;
 
 export function normalizeRepsTempo(value: unknown): RepsTempo {
@@ -73,6 +104,20 @@ export function normalizeRepsTempo(value: unknown): RepsTempo {
   }
 
   return "medium";
+}
+
+export function getSecondsPerRep(
+  tempo: RepsTempo
+) {
+  const normalizedTempo =
+    normalizeRepsTempo(tempo);
+
+  return (
+    AUTO_COUNTER_TEMPO_OPTIONS.find(
+      (option) =>
+        option.value === normalizedTempo
+    )?.secondsPerRep ?? 2
+  );
 }
 
 export function buildInitialSettings(): AppState["settings"] {
@@ -185,6 +230,14 @@ export function buildInitialState(): AppState {
       overtimeSeconds: 0,
       timerEndsAt: null,
       progressStartedAt: null,
+      autoCounterEnabled: false,
+      autoCounterValue: 0,
+      autoCounterTarget: 0,
+      autoCounterMax: 0,
+      autoCounterTempoMs: 2000,
+      autoCounterRunning: false,
+      autoCounterNextRepAt: null,
+      autoCounterLimitReached: false,
     },
   };
 }
@@ -338,6 +391,32 @@ export function migrateAppState(
     workout: {
       ...defaults.workout,
       ...savedState.workout,
+
+      autoCounterEnabled:
+        savedState.workout?.autoCounterEnabled === true,
+
+      autoCounterValue:
+        Number(savedState.workout?.autoCounterValue) || 0,
+
+      autoCounterTarget:
+        Number(savedState.workout?.autoCounterTarget) || 0,
+
+      autoCounterMax:
+        Number(savedState.workout?.autoCounterMax) || 0,
+
+      autoCounterTempoMs:
+        Number(savedState.workout?.autoCounterTempoMs) || 2000,
+
+      autoCounterRunning:
+        savedState.workout?.autoCounterRunning === true,
+
+      autoCounterNextRepAt:
+        typeof savedState.workout?.autoCounterNextRepAt === "number"
+          ? savedState.workout.autoCounterNextRepAt
+          : null,
+
+      autoCounterLimitReached:
+        savedState.workout?.autoCounterLimitReached === true,
     },
   };
 }

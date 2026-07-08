@@ -13,6 +13,7 @@ import { EXERCISE_IMAGES } from "../data/exerciseImages";
 import { playTimerFeedback } from "../services/feedback";
 import { useWorkoutStore } from "../store/workoutStore";
 import {
+  TIMED_PROGRESS_EXTRA_LIMIT_SECONDS,
   formatTime,
   getTimedSetName,
 } from "../utils/workoutLogic";
@@ -54,7 +55,12 @@ export default function TimerScreen() {
     isWorkPhase &&
     workout.progressModeActive;
 
-  const isTimedRestPhase =
+  const hasReachedTimedProgressLimit =
+    isProgressMode &&
+    workout.overtimeSeconds >=
+      TIMED_PROGRESS_EXTRA_LIMIT_SECONDS;
+  
+    const isTimedRestPhase =
     isTimedWorkout && !isWorkPhase;
 
   
@@ -224,7 +230,9 @@ export default function TimerScreen() {
         )} / ${totalRounds}`;
 
   const hint = isProgressMode
-    ? "Keep going, then press Done"
+    ? hasReachedTimedProgressLimit
+      ? "Time limit reached. Press Done to adjust result."
+      : "Keep going, then press Done"
     : isIntervalWorkout
       ? isWorkPhase
         ? "Interval work"
@@ -284,14 +292,16 @@ export default function TimerScreen() {
                 </Text>
               </Pressable>
 
-              <Pressable
-                style={styles.pauseButton}
-                onPress={handlePause}
-              >
-                <Text style={styles.pauseButtonText}>
-                  {pauseButtonText}
-                </Text>
-              </Pressable>
+              {!hasReachedTimedProgressLimit && (
+                <Pressable
+                  style={styles.pauseButton}
+                  onPress={handlePause}
+                >
+                  <Text style={styles.pauseButtonText}>
+                    {pauseButtonText}
+                  </Text>
+                </Pressable>
+              )}
 
               <Pressable
                 style={styles.abortButton}

@@ -82,6 +82,14 @@ export type WorkoutState = {
   overtimeSeconds: number;
   timerEndsAt: number | null;
   progressStartedAt: number | null;
+  autoCounterEnabled: boolean;
+  autoCounterValue: number;
+  autoCounterTarget: number;
+  autoCounterMax: number;
+  autoCounterTempoMs: number;
+  autoCounterRunning: boolean;
+  autoCounterNextRepAt: number | null;
+  autoCounterLimitReached: boolean;
 };
 
 export type AppState = {

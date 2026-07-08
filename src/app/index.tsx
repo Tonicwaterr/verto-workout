@@ -10,8 +10,8 @@ import {
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
-import { EXERCISES } from "../data/exercises";
 import { HOME_EXERCISE_IMAGES } from "../data/exerciseImages";
+import { EXERCISES } from "../data/exercises";
 import { useWorkoutStore } from "../store/workoutStore";
 
 export default function HomeScreen() {
@@ -42,9 +42,7 @@ export default function HomeScreen() {
               VERTO <Text style={styles.brandAccent}>WORKOUT</Text>
             </Text>
 
-            <Text style={styles.subtitle}>
-              Choose your workout type to get started
-            </Text>
+            
           </View>
 
           <Pressable

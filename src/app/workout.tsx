@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { useEffect, useRef } from "react";
 import {
   Image,
   Pressable,
@@ -10,6 +11,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { EXERCISE_IMAGES } from "../data/exerciseImages";
 import { EXERCISES } from "../data/exercises";
+import {
+  playRepTickFeedback,
+  playTargetReachedFeedback,
+} from "../services/feedback";
 import { useWorkoutStore } from "../store/workoutStore";
 import { getPassNote } from "../utils/workoutLogic";
 
@@ -19,25 +24,190 @@ export default function WorkoutScreen() {
     selectedExercise,
     startRestTimer,
     abortWorkout,
+    tickAutoCounter,
+    toggleAutoCounterPause,
+    stopAutoCounterFinalSet,
   } = useWorkoutStore();
 
   const workout = appState.workout;
+  
   const currentPass = workout.currentPass;
   const currentValue = workout.plan[currentPass - 1] ?? 0;
+
+  const isFinalPass = currentPass >= 5;
+
+  const isAutoCounter =
+    workout.autoCounterEnabled &&
+    workout.workoutMode === "reps";
+
+  const autoCounterValue =
+    workout.autoCounterValue;
+
+  const autoCounterTarget =
+    workout.autoCounterTarget || currentValue;
+
+  const hasReachedAutoCounterTarget =
+    autoCounterValue >= autoCounterTarget;
+
+  const pauseButtonText =
+    workout.autoCounterRunning
+      ? "Pause"
+      : "Resume";
 
   const exercise = EXERCISES.find((item) => item.key === selectedExercise);
   const isBulgarianExercise = exercise?.mode === "bulgarian";
 
-  
+  const tickAutoCounterRef = useRef(tickAutoCounter);
+  const autoRestKeyRef = useRef<string | null>(null);
+  const repTickFeedbackValueRef = useRef(0);
+  const targetFeedbackKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    tickAutoCounterRef.current = tickAutoCounter;
+  }, [tickAutoCounter]);
+
+  useEffect(() => {
+    if (
+      !isAutoCounter ||
+      !workout.autoCounterRunning ||
+      workout.timerPhase !== "work"
+    ) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      tickAutoCounterRef.current();
+    }, 100);
+
+    return () => clearInterval(intervalId);
+  }, [
+    isAutoCounter,
+    workout.autoCounterRunning,
+    workout.timerPhase,
+  ]);
+
+  useEffect(() => {
+    if (
+      !isAutoCounter ||
+      isFinalPass ||
+      workout.timerPhase !== "work" ||
+      !hasReachedAutoCounterTarget
+    ) {
+      return;
+    }
+
+    const autoRestKey =
+      `${currentPass}-${autoCounterTarget}`;
+
+    if (autoRestKeyRef.current === autoRestKey) {
+      return;
+    }
+
+    autoRestKeyRef.current = autoRestKey;
+
+    startRestTimer();
+    router.replace("/rest");
+  }, [
+    isAutoCounter,
+    isFinalPass,
+    workout.timerPhase,
+    hasReachedAutoCounterTarget,
+    currentPass,
+    autoCounterTarget,
+    startRestTimer,
+  ]);
+
+  useEffect(() => {
+    if (
+      !isAutoCounter ||
+      workout.timerPhase !== "work" ||
+      autoCounterValue <= 0
+    ) {
+      return;
+    }
+
+    if (
+      repTickFeedbackValueRef.current ===
+      autoCounterValue
+    ) {
+      return;
+    }
+
+    repTickFeedbackValueRef.current =
+      autoCounterValue;
+
+    /*
+    * Do not play the soft tick on the exact target rep.
+    * The target rep gets the stronger target feedback instead.
+    * After the target, soft ticks continue again.
+    */
+    if (autoCounterValue === autoCounterTarget) {
+      return;
+    }
+
+    playRepTickFeedback(appState.globalSettings);
+  }, [
+    isAutoCounter,
+    workout.timerPhase,
+    autoCounterValue,
+    autoCounterTarget,
+    appState.globalSettings,
+  ]);
+
+  useEffect(() => {
+    if (
+      !isAutoCounter ||
+      workout.timerPhase !== "work" ||
+      !hasReachedAutoCounterTarget
+    ) {
+      return;
+    }
+
+    const targetFeedbackKey =
+      `${currentPass}-${autoCounterTarget}`;
+
+    if (
+      targetFeedbackKeyRef.current ===
+      targetFeedbackKey
+    ) {
+      return;
+    }
+
+    targetFeedbackKeyRef.current =
+      targetFeedbackKey;
+
+    playTargetReachedFeedback(appState.globalSettings);
+  }, [
+    isAutoCounter,
+    workout.timerPhase,
+    hasReachedAutoCounterTarget,
+    currentPass,
+    autoCounterTarget,
+    appState.globalSettings,
+  ]);
+
+  useEffect(() => {
+    repTickFeedbackValueRef.current = 0;
+  }, [currentPass]);
 
   function handleDone() {
-    if (currentPass >= 5) {      
+    if (isAutoCounter && isFinalPass) {
+      stopAutoCounterFinalSet();
+      router.push("/result");
+      return;
+    }
+
+    if (currentPass >= 5) {
       router.push("/result");
       return;
     }
 
     startRestTimer();
     router.push("/rest");
+  }
+
+  function handlePauseAutoCounter() {
+    toggleAutoCounterPause();
   }
 
   function handleAbort() {
@@ -89,24 +259,95 @@ export default function WorkoutScreen() {
               </View>
             ) : (
               <>
-                <Text style={styles.reps}>{currentValue}</Text>
-
-                <Text style={styles.label}>
-                  reps
+                <Text style={styles.reps}>
+                  {isAutoCounter
+                    ? autoCounterValue
+                    : currentValue}
                 </Text>
+
+                {isAutoCounter ? (
+                  <>
+                    <Text style={styles.label}>
+                      of {autoCounterTarget} reps
+                    </Text>
+
+                    {hasReachedAutoCounterTarget && isFinalPass && (
+                      <Text style={styles.autoCounterMessage}>
+                        Target complete. Keep going or press Done.
+                      </Text>
+                    )}
+
+                    {workout.autoCounterLimitReached && (
+                      <Text style={styles.autoCounterMessage}>
+                        Counter limit reached. Press Done to adjust result.
+                      </Text>
+                    )}
+                  </>
+                ) : (
+                  <Text style={styles.label}>
+                    reps
+                  </Text>
+                )}
               </>
             )}
            
           </View>
 
           <View style={styles.actions}>
-            <Pressable style={styles.doneButton} onPress={handleDone}>
-              <Text style={styles.doneButtonText}>Done</Text>
-            </Pressable>
+            {isAutoCounter ? (
+              <>
+                {isFinalPass && (
+                  <Pressable
+                    style={styles.doneButton}
+                    onPress={handleDone}
+                  >
+                    <Text style={styles.doneButtonText}>
+                      Done
+                    </Text>
+                  </Pressable>
+                )}
 
-            <Pressable style={styles.abortButton} onPress={handleAbort}>
-              <Text style={styles.abortButtonText}>Abort</Text>
-            </Pressable>
+                {!workout.autoCounterLimitReached && (
+                  <Pressable
+                    style={styles.pauseButton}
+                    onPress={handlePauseAutoCounter}
+                  >
+                    <Text style={styles.pauseButtonText}>
+                      {pauseButtonText}
+                    </Text>
+                  </Pressable>
+                )}
+
+                <Pressable
+                  style={styles.abortButton}
+                  onPress={handleAbort}
+                >
+                  <Text style={styles.abortButtonText}>
+                    Abort
+                  </Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Pressable
+                  style={styles.doneButton}
+                  onPress={handleDone}
+                >
+                  <Text style={styles.doneButtonText}>
+                    Done
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.abortButton}
+                  onPress={handleAbort}
+                >
+                  <Text style={styles.abortButtonText}>
+                    Abort
+                  </Text>
+                </Pressable>
+              </>
+            )}
           </View>
         </View>
       </View>
@@ -233,5 +474,27 @@ const styles = StyleSheet.create({
   exerciseImage: {
     width: "100%",
     height: 200,
+  },
+  autoCounterMessage: {
+    color: "#f8fafc",
+    fontSize: 16,
+    fontWeight: "700",
+    textAlign: "center",
+    marginTop: -8,
+    marginBottom: 14,
+  },
+  pauseButton: {
+    minHeight: 54,
+    borderRadius: 16,
+    backgroundColor: "rgba(34,211,238,0.14)",
+    borderWidth: 1,
+    borderColor: "#22d3ee",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pauseButtonText: {
+    color: "#22d3ee",
+    fontSize: 17,
+    fontWeight: "900",
   },
 });

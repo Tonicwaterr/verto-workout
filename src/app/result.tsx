@@ -25,11 +25,27 @@ export default function ResultScreen() {
   } = useWorkoutStore();
 
   const workout = appState.workout;
+  const isBulgarianExercise =
+    selectedExercise === "Bulgarian Squats";
+  
   const plannedFinalSet = workout.plan[4] ?? 0;
   const actualFinalSet = workout.resultValue;
 
-  const isBulgarianExercise =
-    selectedExercise === "Bulgarian Squats";
+  const performanceDifference =
+    actualFinalSet - plannedFinalSet;
+
+  const repsUnit =
+    isBulgarianExercise ? "reps per leg" : "reps";
+
+  const targetReferenceText =
+    performanceDifference > 0
+      ? `Target: ${plannedFinalSet} ${repsUnit}  •  Extra: +${performanceDifference} ${repsUnit}`
+      : performanceDifference < 0
+        ? `Target: ${plannedFinalSet} ${repsUnit}  •  ${Math.abs(
+            performanceDifference
+          )} ${repsUnit} below target`
+        : `Target: ${plannedFinalSet} ${repsUnit}  •  Target completed`;
+  
 
   const movement = getMovement(plannedFinalSet, actualFinalSet);
 
@@ -114,22 +130,31 @@ export default function ResultScreen() {
             <Text style={styles.title}>Set 5</Text>
             <Text style={styles.subtitle}>{selectedExercise}</Text>
 
-            <View style={styles.adjustRow}>
-              <Pressable style={styles.adjustButton} onPress={handleMinus}>
-                <Text style={styles.adjustButtonText}>−</Text>
-              </Pressable>
+            <View style={styles.adjustBlock}>
+              <View style={styles.adjustRow}>
+                <Pressable style={styles.adjustButton} onPress={handleMinus}>
+                  <Text style={styles.adjustButtonText}>−</Text>
+                </Pressable>
 
-              <View style={styles.resultBox}>
-                <Text style={styles.resultValue}>{actualFinalSet}</Text>
-                <Text style={styles.resultLabel}>
-                  {isBulgarianExercise ? "reps per leg" : "reps"}
-                </Text>
+                <View style={styles.resultBox}>
+                  <Text style={styles.resultValue}>
+                    {actualFinalSet}
+                  </Text>
+
+                  <Text style={styles.resultLabel}>
+                    {repsUnit}
+                  </Text>
+                </View>
+
+                <Pressable style={styles.adjustButton} onPress={handlePlus}>
+                  <Text style={styles.adjustButtonText}>+</Text>
+                </Pressable>
               </View>
 
-              <Pressable style={styles.adjustButton} onPress={handlePlus}>
-                <Text style={styles.adjustButtonText}>+</Text>
-              </Pressable>
-            </View>
+              <Text style={styles.targetReference}>
+                {targetReferenceText}
+              </Text>
+            </View>      
 
             <Text style={styles.helperText}>
               Adjust the reps you completed in the last set.
@@ -182,12 +207,16 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 30,
   },
+  adjustBlock: {
+    alignItems: "center",
+    marginBottom: 18,
+  },
   adjustRow: {
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 14,
-    marginBottom: 18,
   },
   adjustButton: {
     width: 58,
@@ -205,7 +234,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   resultBox: {
-    minWidth: 120,
+    width: 130,
     alignItems: "center",
   },
   resultValue: {
@@ -239,15 +268,24 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 22,
   },
+  targetReference: {
+    color: "#94a3b8",
+    fontSize: 14,
+    fontWeight: "700",
+    textAlign: "center",
+    marginTop: 10,
+    minHeight: 20,
+    paddingHorizontal: 8,
+  },
   doneButton: {
     minHeight: 58,
     borderRadius: 16,
-    backgroundColor: "#d946ef",
+    backgroundColor: "#22d3ee",
     alignItems: "center",
     justifyContent: "center",
   },
   doneButtonText: {
-    color: "#ffffff",
+    color: "#082f49",
     fontSize: 20,
     fontWeight: "900",
   },
