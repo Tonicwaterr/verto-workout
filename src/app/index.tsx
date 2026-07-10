@@ -9,6 +9,11 @@ import {
   View,
 } from "react-native";
 
+import {
+  Feather,
+  MaterialCommunityIcons,
+} from "@expo/vector-icons";
+
 import { SafeAreaView } from "react-native-safe-area-context";
 import { HOME_EXERCISE_IMAGES } from "../data/exerciseImages";
 import { EXERCISES } from "../data/exercises";
@@ -27,30 +32,51 @@ export default function HomeScreen() {
     (settings) => settings.history
   );
 
-  const workoutCount = allHistoryItems.length;
-
-  const personalBestCount = allHistoryItems.filter(
-    (item) => item.movement > 0
-  ).length;
+  const currentStreak = getCurrentWorkoutStreak(
+    allHistoryItems.map((item) => item.date)
+  );
 
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text style={styles.brand}>
-              VERTO <Text style={styles.brandAccent}>WORKOUT</Text>
-            </Text>
+          <View style={styles.streakRow}>
+            <MaterialCommunityIcons
+              name="fire"
+              size={30}
+              color="#22d3ee"
+            />
 
-            
+            <Text style={styles.streakNumber}>
+              {currentStreak}
+            </Text>
           </View>
 
-          <Pressable
-            style={styles.infoButton}
-            onPress={() => router.push("/onboarding")}
-          >
-            <Text style={styles.infoButtonText}>i</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              style={styles.headerIconButton}
+              onPress={() => router.push("/history")}
+              hitSlop={12}
+            >
+              <Feather
+                name="clock"
+                size={25}
+                color="#22d3ee"
+              />
+            </Pressable>
+
+            <Pressable
+              style={styles.headerIconButton}
+              onPress={() => router.push("/settings")}
+              hitSlop={12}
+            >
+              <Feather
+                name="settings"
+                size={25}
+                color="#22d3ee"
+              />
+            </Pressable>
+          </View>
         </View>
 
         <FlatList
@@ -78,49 +104,50 @@ export default function HomeScreen() {
               </Pressable>
             );
           }}
-        />
-
-
-        <View style={styles.menu}>
-          <Pressable
-            style={styles.menuButton}
-            onPress={() => router.push("/history")}
-          >
-            <Text style={styles.menuText}>History</Text>
-            <Text style={styles.menuArrow}>›</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.menuButton}
-            onPress={() => router.push("/settings")}
-          >
-            <Text style={styles.menuText}>Settings</Text>
-            <Text style={styles.menuArrow}>›</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.statsBox}>
-          <View style={styles.statItem}>
-            <Text style={styles.statIcon}>🔥</Text>
-            <View>
-              <Text style={styles.statNumber}>{workoutCount}</Text>
-              <Text style={styles.statLabel}>Workouts</Text>
-            </View>
-          </View>
-
-          <View style={styles.statDivider} />
-
-          <View style={styles.statItem}>
-            <Text style={styles.statIcon}>🏆</Text>
-            <View>
-              <Text style={styles.statNumber}>{personalBestCount}</Text>
-              <Text style={styles.statLabel}>Personal Bests</Text>
-            </View>
-          </View>
-        </View>
+        />      
       </View>
     </SafeAreaView>
   );
+}
+
+function getDateKey(date: Date) {
+  return date.toLocaleDateString("sv-SE");
+}
+
+function addDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
+function getCurrentWorkoutStreak(dateKeys: string[]) {
+  const completedDates = new Set(
+    dateKeys.filter(Boolean)
+  );
+
+  const today = new Date();
+  const todayKey = getDateKey(today);
+  const yesterday = addDays(today, -1);
+  const yesterdayKey = getDateKey(yesterday);
+
+  let cursorDate: Date;
+
+  if (completedDates.has(todayKey)) {
+    cursorDate = today;
+  } else if (completedDates.has(yesterdayKey)) {
+    cursorDate = yesterday;
+  } else {
+    return 0;
+  }
+
+  let streak = 0;
+
+  while (completedDates.has(getDateKey(cursorDate))) {
+    streak += 1;
+    cursorDate = addDays(cursorDate, -1);
+  }
+
+  return streak;
 }
 
 const styles = StyleSheet.create({
@@ -135,42 +162,19 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 16,
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
-    gap: 14,
   },
-  brand: {
-    fontSize: 34,
-    fontWeight: "900",
-    color: "#f8fafc",
-    letterSpacing: -1,
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 18,
   },
-  brandAccent: {
-    color: "#22d3ee",
-  },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 17,
-    color: "#94a3b8",
-  },
-  headerText: {
-    flex: 1,
-  },
-  infoButton: {
+  headerIconButton: {
     width: 34,
     height: 34,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: "#22d3ee",
-    backgroundColor: "rgba(34,211,238,0.06)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  infoButtonText: {
-    color: "#22d3ee",
-    fontSize: 20,
-    fontWeight: "900",
-    lineHeight: 28,
   },
   exerciseList: {
     paddingBottom: 20,
@@ -192,65 +196,16 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.14)",
     overflow: "hidden",
   },
-  menu: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 10,
-  },
-  menuButton: {
-    flex: 1,
-    minHeight: 58,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    paddingHorizontal: 16,
+  streakRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    
   },
-  menuText: {
-    color: "#f8fafc",
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  menuArrow: {
+  streakNumber: {
     color: "#cbd5e1",
-    fontSize: 32,
-  },
-  statsBox: {
-    marginTop: 14,
-    minHeight: 96,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    flexDirection: "row",
-    overflow: "hidden",
-  },
-  statItem: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    padding: 14,
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  statIcon: {
-    fontSize: 34,
-  },
-  statNumber: {
-    color: "#f8fafc",
-    fontSize: 30,
-    fontWeight: "900",
-  },
-  statLabel: {
-    color: "#94a3b8",
-    fontSize: 13,
+    fontSize: 18,
+    fontWeight: "600",
+    lineHeight: 28,
     marginTop: 2,
   },
 });

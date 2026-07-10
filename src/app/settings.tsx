@@ -23,11 +23,6 @@ export default function SettingsScreen() {
         Constants.expoConfig?.version ??
         "Dev";
 
-  const buildVersion =
-    Constants.appOwnership === "expo"
-      ? Constants.expoConfig?.ios?.buildNumber
-      : Application.nativeBuildVersion;
-
   const displayedVersion = appVersion;
   
     function handleResetAllData() {
@@ -100,6 +95,20 @@ export default function SettingsScreen() {
               {displayedVersion}
             </Text>
           </View>
+
+          <Pressable
+            style={styles.settingsRow}
+            onPress={() => router.push("/onboarding")}
+          >
+            <View>
+              <Text style={styles.settingsLabel}>App guide</Text>
+              <Text style={styles.settingsHelp}>
+                Review the introduction and workout basics.
+              </Text>
+            </View>
+
+            <Text style={styles.settingsValue}>›</Text>
+          </Pressable>
 
           <View style={styles.divider} />
 
