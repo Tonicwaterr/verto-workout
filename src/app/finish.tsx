@@ -6,10 +6,13 @@ import {
   View,
 } from "react-native";
 
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+
 import { useWorkoutStore } from "../store/workoutStore";
 import {
   calculateTimedProgressionUpdate,
+  getDailyChargePoints,
   getTimedMovement,
   isProgressionEnabled,
   isTimedSettings,
@@ -34,7 +37,12 @@ export default function FinishScreen() {
     workout.workoutMode === "timed" &&
     isTimedSettings(settings);
 
-  const plannedFinalSet =
+  const dailyChargePoints =
+    isTimedWorkout
+      ? getDailyChargePoints(settings.level)
+      : 0;
+  
+    const plannedFinalSet =
     workout.plan[4] ?? 0;
 
   const actualFinalSet =
@@ -185,6 +193,18 @@ export default function FinishScreen() {
       <View style={styles.container}>
         <View style={styles.card}>
           <View>
+            <View style={styles.chargeReward}>
+              <MaterialCommunityIcons
+                name="arm-flex"
+                size={24}
+                color="#22d3ee"
+              />
+
+              <Text style={styles.chargeRewardText}>
+                +{dailyChargePoints}
+              </Text>
+            </View>
+
             <Text style={styles.title}>Set 5</Text>
             <Text style={styles.subtitle}>{selectedExercise}</Text>
 
@@ -352,6 +372,18 @@ const styles = StyleSheet.create({
   doneButtonText: {
     color: "#082f49",
     fontSize: 20,
+    fontWeight: "900",
+  },
+  chargeReward: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 10,
+  },
+  chargeRewardText: {
+    color: "#22d3ee",
+    fontSize: 18,
     fontWeight: "900",
   },
 });

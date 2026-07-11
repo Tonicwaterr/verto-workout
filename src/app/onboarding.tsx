@@ -29,7 +29,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     text:
       "Verto creates structured five-set workouts based on your current ability.",
     supportingText:
-      "Choose an exercise, set your starting point, and select the intensity that suits you today.",
+      "Choose an exercise, set your starting point, and let Verto guide the session.",
   },
   {
     title: "Set your starting point",
@@ -39,7 +39,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
       {
         label: "Estimated max",
         text:
-          "The most clean repetitions you believe you could currently perform in one set.",
+          "The most clean repetitions or seconds you believe you could currently perform in one set.",
       },
       {
         label: "Rest time",
@@ -52,7 +52,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     title: "Choose today's intensity",
     text:
-      "Select the session that best matches how your body feels and how you want to train.",
+      "Pick the session that best matches how your body feels today.",
     details: [
       {
         label: "Light",
@@ -72,23 +72,91 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     ],
   },
   {
-    title: "Train and progress",
+    title: "Train and adjust",
     text:
       "Complete the five sets and use the automatic rest timer between them.",
     details: [
       {
-        label: "After set five",
+        label: "Final set",
         text:
-          "Enter the number of repetitions you actually completed.",
+          "After set five, adjust the result if needed before saving.",
       },
       {
-        label: "Over time",
+        label: "Progression",
         text:
-          "Verto adjusts your estimated max based on your Moderate and Heavy workouts.",
+          "Moderate and Heavy workouts can raise or lower your estimated max over time.",
+      },
+      {
+        label: "Auto-counter",
+        text:
+          "Some repetition exercises can count automatically if you enable it in the exercise settings.",
+      },
+    ],
+  },
+  {
+    title: "Daily Charge",
+    text:
+      "Daily Charge shows how much training you have completed today.",
+    details: [
+      {
+        label: "Light",
+        text:
+          "Adds 8% Daily Charge.",
+      },
+      {
+        label: "Moderate",
+        text:
+          "Adds 12% Daily Charge.",
+      },
+      {
+        label: "Heavy",
+        text:
+          "Adds 16% Daily Charge.",
       },
     ],
     supportingText:
-      "Your workout history is saved locally on your device.",
+      "Daily Charge resets each day and caps at 100%.",
+  },
+  {
+    title: "Streak and rest days",
+    text:
+      "Your streak rewards consistency, not just hard training.",
+    details: [
+      {
+        label: "Workout day",
+        text:
+          "Completing a workout keeps your streak alive.",
+      },
+      {
+        label: "Rest day",
+        text:
+          "If your body needs recovery, log a Rest day from the Daily Charge panel.",
+      },
+    ],
+    supportingText:
+      "Recovery is part of training. Rest days keep your streak alive without adding Daily Charge.",
+  },
+  {
+    title: "History and settings",
+    text:
+      "Use History to review your recent training and Settings to adjust the app.",
+    details: [
+      {
+        label: "History",
+        text:
+          "Shows your workouts from the last 14 days, grouped by day.",
+      },
+      {
+        label: "App guide",
+        text:
+          "You can reopen this guide later from Settings.",
+      },
+      {
+        label: "Privacy",
+        text:
+          "Your workout data is stored locally on this device.",
+      },
+    ],
   },
 ];
 

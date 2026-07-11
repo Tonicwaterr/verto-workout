@@ -40,6 +40,18 @@ export const LEVEL_ADJUSTMENTS: Record<DifficultyLevel, number> = {
   5: 10,
 };
 
+export const DAILY_CHARGE_CAP = 100;
+
+export const DAILY_CHARGE_POINTS: Record<DifficultyLevel, number> = {
+  1: 8,
+  3: 12,
+  5: 16,
+};
+
+export function getDailyChargePoints(level: DifficultyLevel) {
+  return DAILY_CHARGE_POINTS[level] ?? 12;
+}
+
 export const AUTO_COUNTER_TEMPO_OPTIONS: Array<{
   value: RepsTempo;
   label: string;
@@ -208,6 +220,7 @@ export function buildInitialState(): AppState {
     screen: "home",
     selectedExercise: "Push-ups",
     settings: buildInitialSettings(),
+    restDays: [],
     globalSettings: {
       language: "en",
       beepEnabled: true,
@@ -384,6 +397,9 @@ export function migrateAppState(
     ...defaults,
     ...savedState,
     settings: migratedSettings,
+    restDays: Array.isArray(savedState.restDays)
+      ? savedState.restDays
+      : [],
     globalSettings: {
       ...defaults.globalSettings,
       ...savedState.globalSettings,

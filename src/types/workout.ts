@@ -17,10 +17,12 @@ export type DifficultyLevel = 1 | 3 | 5;
 
 export type WorkoutHistoryItem = {
   date: string;
+  completedAt?: string;
   exercise: string;
   subtitle: string;
   label: string;
   movement: number;
+  dailyChargePoints?: number;
 };
 
 export type RepsExerciseSettings = {
@@ -98,4 +100,5 @@ export type AppState = {
   settings: Record<string, ExerciseSettings>;
   globalSettings: GlobalSettings;
   workout: WorkoutState;
+  restDays: string[];
 };

@@ -23,6 +23,7 @@ import {
   calculateProgressionUpdate,
   calculateTimedProgressionUpdate,
   getAutoCounterMaxReps,
+  getDailyChargePoints,
   getMovement,
   getTimedMovement,
   isProgressionEnabled,
@@ -72,6 +73,7 @@ type WorkoutStore = {
   abortWorkout: () => void;
   resetCurrentExercise: () => void;
   resetAllData: () => Promise<void>;
+  logRestDay: () => void;
   toggleBeep: () => void;
   toggleVibration: () => void;
   completeOnboarding: () => void;
@@ -154,6 +156,10 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
 
   function getTimerEndTime(seconds: number) {
     return Date.now() + Math.max(0, seconds) * 1000;
+  }
+
+  function getDateKey(date: Date) {
+    return date.toLocaleDateString("sv-SE");
   }
 
   function startRepsWorkout(
@@ -795,12 +801,16 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
                 : ` Estimated max reduced from ${currentEstimatedMax} to ${nextMaxReps}.`
               : "";
 
+      const completedAt = new Date();
+
       const historyItem = {
-        date: new Date().toLocaleDateString("sv-SE"),
+        date: completedAt.toLocaleDateString("sv-SE"),
+        completedAt: completedAt.toISOString(),
         exercise: selectedExercise,
         subtitle: `${performanceText}.${progressionText}`,
         label: historyLabel,
         movement,
+        dailyChargePoints: getDailyChargePoints(currentSettings.level),
       };
 
       const updatedSettings: RepsExerciseSettings = {
@@ -931,13 +941,17 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
               ? ` Estimated max reduced from ${currentEstimatedMax} to ${nextMaxSeconds} sec.`
               : "";
 
+      const completedAt = new Date();
+
       const historyItem = {
-        date: new Date().toLocaleDateString("sv-SE"),
+        date: completedAt.toLocaleDateString("sv-SE"),
+        completedAt: completedAt.toISOString(),
         exercise: selectedExercise,
         subtitle:
           `${performanceText}.${progressionText}`,
         label: historyLabel,
         movement,
+        dailyChargePoints: getDailyChargePoints(currentSettings.level),
       };
 
       const updatedSettings: TimedExerciseSettings = {
@@ -1081,6 +1095,24 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  function logRestDay() {
+    setAppState((currentState) => {
+      const todayKey = getDateKey(new Date());
+
+      if (currentState.restDays.includes(todayKey)) {
+        return currentState;
+      }
+
+      return {
+        ...currentState,
+        restDays: [
+          todayKey,
+          ...currentState.restDays,
+        ],
+      };
+    });
+  }
+
   function toggleBeep() {
     setAppState((currentState) => ({
       ...currentState,
@@ -1138,6 +1170,7 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         abortWorkout,
         resetCurrentExercise,
         resetAllData,
+        logRestDay,
         toggleBeep,
         toggleVibration,
         completeOnboarding,
