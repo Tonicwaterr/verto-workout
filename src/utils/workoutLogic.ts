@@ -14,7 +14,7 @@ export const DEFAULT_TIMED_WORK = 30;
 export const DEFAULT_TIMED_REST = 20;
 export const TIMED_PROGRESS_EXTRA_LIMIT_SECONDS = 30;
 
-export const BASE_PERCENTS = [40, 60, 50, 50, 60];
+export const BASE_PERCENTS = [50, 80, 60, 70, 80];
 
 export const DIFFICULTY_OPTIONS: {
   value: DifficultyLevel;
@@ -43,9 +43,9 @@ export const LEVEL_ADJUSTMENTS: Record<DifficultyLevel, number> = {
 export const DAILY_CHARGE_CAP = 100;
 
 export const DAILY_CHARGE_POINTS: Record<DifficultyLevel, number> = {
-  1: 8,
-  3: 12,
-  5: 16,
+  1: 10,
+  3: 15,
+  5: 20,
 };
 
 export function getDailyChargePoints(level: DifficultyLevel) {

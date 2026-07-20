@@ -1,3 +1,4 @@
+import { useKeepAwake } from "expo-keep-awake";
 import { router } from "expo-router";
 import { useEffect, useRef } from "react";
 import {
@@ -19,6 +20,8 @@ import { useWorkoutStore } from "../store/workoutStore";
 import { getPassNote } from "../utils/workoutLogic";
 
 export default function WorkoutScreen() {
+  useKeepAwake();
+  
   const {
     appState,
     selectedExercise,

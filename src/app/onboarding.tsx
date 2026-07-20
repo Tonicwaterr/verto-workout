@@ -101,17 +101,17 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
       {
         label: "Light",
         text:
-          "Adds 8% Daily Charge.",
+          "Adds 10% Daily Charge.",
       },
       {
         label: "Moderate",
         text:
-          "Adds 12% Daily Charge.",
+          "Adds 15% Daily Charge.",
       },
       {
         label: "Heavy",
         text:
-          "Adds 16% Daily Charge.",
+          "Adds 20% Daily Charge.",
       },
     ],
     supportingText:

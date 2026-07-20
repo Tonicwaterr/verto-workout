@@ -792,10 +792,10 @@ export default function ExerciseScreen() {
 
                     <Pressable
                       style={styles.modalSaveButton}
-                      onPress={saveExerciseSettings}
+                      onPress={() => scrollToModalPage(1)}
                     >
                       <Text style={styles.modalSaveButtonText}>
-                        Done
+                        Next
                       </Text>
                     </Pressable>
                   </ScrollView>

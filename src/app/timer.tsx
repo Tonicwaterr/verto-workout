@@ -1,3 +1,4 @@
+import { useKeepAwake } from "expo-keep-awake";
 import { router } from "expo-router";
 import { useEffect, useRef } from "react";
 import {
@@ -18,7 +19,11 @@ import {
   getTimedSetName,
 } from "../utils/workoutLogic";
 
+const ZERO_HOLD_MS = 1000;
+
 export default function TimerScreen() {
+  useKeepAwake();
+  
   const {
     appState,
     selectedExercise,
@@ -45,7 +50,6 @@ export default function TimerScreen() {
   const totalRounds = workout.plan.length;
 
   const currentPass = workout.currentPass;
-  const currentValue = workout.timerLeft;
 
   const isLastRound =
     workout.currentPass >= totalRounds;
@@ -60,19 +64,30 @@ export default function TimerScreen() {
     workout.overtimeSeconds >=
       TIMED_PROGRESS_EXTRA_LIMIT_SECONDS;
   
-    const isTimedRestPhase =
-    isTimedWorkout && !isWorkPhase;
-
-  
   const timerKey = `${workout.workoutMode}-${workout.currentPass}-${workout.timerPhase}-${workout.timerEndsAt ?? "none"}`;  
 
   const tickTimerRef = useRef(tickTimer);
   const warningFeedbackKey = useRef<string | null>(null);
   const completionFeedbackKey = useRef<string | null>(null);
+  const zeroHoldTimeoutRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearZeroHoldTimeout() {
+    if (zeroHoldTimeoutRef.current) {
+      clearTimeout(zeroHoldTimeoutRef.current);
+      zeroHoldTimeoutRef.current = null;
+    }
+  } 
 
   useEffect(() => {
     tickTimerRef.current = tickTimer;
   }, [tickTimer]);
+
+  useEffect(() => {
+    return () => {
+      clearZeroHoldTimeout();
+    };
+  }, []);
 
   /*
    * Keeping the interval independent from normal state updates prevents
@@ -140,29 +155,30 @@ export default function TimerScreen() {
 
     void playTimerFeedback(appState.globalSettings);
 
-    if (isWorkPhase) {
-      /*
-      * The standalone Interval Timer finishes normally.
-      */
-      if (isIntervalWorkout && isLastRound) {
-        router.replace("/finish");
-        return;
-      }
-
-      /*
-      * The fifth timed exercise set enters Progress Mode instead
-      * of ending automatically.
-      */
-      if (isTimedWorkout && isLastRound) {
-        enterTimedProgressMode();
-        return;
-      }
-
-      startRestTimer();
+    if (isWorkPhase && isTimedWorkout && isLastRound) {
+      enterTimedProgressMode();
       return;
     }
 
-    startNextTimedPass();
+    zeroHoldTimeoutRef.current = setTimeout(() => {
+      zeroHoldTimeoutRef.current = null;
+
+      if (isWorkPhase) {
+        /*
+        * The standalone Interval Timer finishes normally.
+        */
+        if (isIntervalWorkout && isLastRound) {
+          router.replace("/finish");
+          return;
+        }
+
+        startRestTimer();
+        router.replace("/rest");
+        return;
+      }
+
+      startNextTimedPass();
+    }, ZERO_HOLD_MS);
   }, [
     workout.active,
     workout.timerRunning,
@@ -180,11 +196,13 @@ export default function TimerScreen() {
   ]);
 
   function handleAbort() {
+    clearZeroHoldTimeout();
     abortWorkout();
     router.replace("/");
   }
 
   function handleTimedDone() {
+    clearZeroHoldTimeout();
     stopTimedFinalSet();
     router.replace("/finish");
   }
@@ -194,6 +212,7 @@ export default function TimerScreen() {
   }
 
   function handleSkipRest() {
+    clearZeroHoldTimeout();
     startNextTimedPass();
   }
 
@@ -258,67 +277,8 @@ export default function TimerScreen() {
     isTimedWorkout &&
     isWorkPhase &&
     isLastRound;
-
-  if (isTimedRestPhase) {
-    return (
-      <SafeAreaView style={styles.screen}>
-        <View style={styles.container}>
-          <View style={styles.card}>
-            <View style={styles.heading}>
-              <Text style={styles.title}>Rest</Text>
-
-              <Text style={styles.nextSet}>
-                Next: {nextMovementName}
-              </Text>
-            </View>
-
-            <View style={styles.timerSection}>
-              <Text style={styles.timer}>
-                {timerDisplay}
-              </Text>
-
-              <Text style={styles.message}>
-                Get ready for the next set
-              </Text>
-            </View>
-
-            <View style={styles.actions}>
-              <Pressable
-                style={styles.skipButton}
-                onPress={handleSkipRest}
-              >
-                <Text style={styles.skipButtonText}>
-                  Skip Rest
-                </Text>
-              </Pressable>
-
-              {!hasReachedTimedProgressLimit && (
-                <Pressable
-                  style={styles.pauseButton}
-                  onPress={handlePause}
-                >
-                  <Text style={styles.pauseButtonText}>
-                    {pauseButtonText}
-                  </Text>
-                </Pressable>
-              )}
-
-              <Pressable
-                style={styles.abortButton}
-                onPress={handleAbort}
-              >
-                <Text style={styles.abortButtonText}>
-                  Abort Workout
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
   
-    return (
+  return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.container}>
         <View style={styles.card}>
@@ -532,39 +492,5 @@ const styles = StyleSheet.create({
     color: "#f8fafc",
     fontSize: 17,
     fontWeight: "800",
-  },
-
-  /* Rest phase */
-
-  heading: {
-    alignItems: "center",
-  },
-  title: {
-    color: "#22d3ee",
-    fontSize: 34,
-    fontWeight: "900",
-  },
-  nextSet: {
-    color: "#94a3b8",
-    fontSize: 22,
-    fontWeight: "700",
-    textAlign: "center",
-    marginTop: 18,
-    marginBottom: 12,
-  },
-  timerSection: {
-    alignItems: "center",
-  },
-  skipButton: {
-    minHeight: 58,
-    borderRadius: 16,
-    backgroundColor: "#22d3ee",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  skipButtonText: {
-    color: "#082f49",
-    fontSize: 19,
-    fontWeight: "900",
   },
 });
