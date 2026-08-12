@@ -211,11 +211,6 @@ export default function TimerScreen() {
     toggleTimerPause();
   }
 
-  function handleSkipRest() {
-    clearZeroHoldTimeout();
-    startNextTimedPass();
-  }
-
   const currentMovementName =
     getTimedSetName(
       selectedExercise,
@@ -238,15 +233,6 @@ export default function TimerScreen() {
     : isWorkPhase
       ? currentMovementName
       : "Rest";
-
-  const setText = isIntervalWorkout
-    ? `Round ${workout.currentPass} / ${totalRounds}`
-    : isWorkPhase
-      ? `Set ${workout.currentPass} / ${totalRounds}`
-      : `Next: Set ${Math.min(
-          workout.currentPass + 1,
-          totalRounds
-        )} / ${totalRounds}`;
 
   const hint = isProgressMode
     ? hasReachedTimedProgressLimit

@@ -60,8 +60,7 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <View style={styles.settingsRow}>
             <View>
-              <Text style={styles.settingsLabel}>Language</Text>
-              <Text style={styles.settingsHelp}>More languages can be added later.</Text>
+              <Text style={styles.settingsLabel}>Language</Text>      
             </View>
             <Text style={styles.settingsValue}>English</Text>
           </View>

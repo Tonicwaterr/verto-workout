@@ -260,7 +260,6 @@ type LegacyRepsExerciseSettings = Omit<
   "progressPoints"
 > & {
   progressPoints?: number;
-  progressStage?: number;
 };
 
 export function migrateAppState(
