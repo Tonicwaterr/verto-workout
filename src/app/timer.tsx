@@ -11,7 +11,10 @@ import {
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { EXERCISE_IMAGES } from "../data/exerciseImages";
-import { playTimerFeedback } from "../services/feedback";
+import {
+  playTimerCompleteFeedback,
+  playTimerWarningFeedback,
+} from "../services/feedback";
 import { useWorkoutStore } from "../store/workoutStore";
 import {
   TIMED_PROGRESS_EXTRA_LIMIT_SECONDS,
@@ -133,7 +136,7 @@ export default function TimerScreen() {
       if (warningFeedbackKey.current !== timerKey) {
         warningFeedbackKey.current = timerKey;
 
-        void playTimerFeedback(appState.globalSettings);
+        void playTimerWarningFeedback(appState.globalSettings);
       }
 
       return;
@@ -153,7 +156,7 @@ export default function TimerScreen() {
 
     completionFeedbackKey.current = timerKey;
 
-    void playTimerFeedback(appState.globalSettings);
+    void playTimerCompleteFeedback(appState.globalSettings);
 
     if (isWorkPhase && isTimedWorkout && isLastRound) {
       enterTimedProgressMode();

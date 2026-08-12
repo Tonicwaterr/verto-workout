@@ -7,7 +7,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { RestTimerCard } from "../components/RestTimerCard";
-import { playTimerFeedback } from "../services/feedback";
+import {
+  playTimerCompleteFeedback,
+  playTimerWarningFeedback,
+} from "../services/feedback";
 import { useWorkoutStore } from "../store/workoutStore";
 import {
   formatTime,
@@ -112,7 +115,7 @@ export default function RestScreen() {
 
     warningFeedbackKey.current = timerKey;
 
-    void playTimerFeedback(appState.globalSettings);
+    void playTimerWarningFeedback(appState.globalSettings);
   }, [
     workout.active,
     workout.timerRunning,
@@ -142,7 +145,7 @@ export default function RestScreen() {
     completionFeedbackKey.current = timerKey;
     hasCompletedRest.current = true;
 
-    void playTimerFeedback(appState.globalSettings);
+    void playTimerCompleteFeedback(appState.globalSettings);
 
     zeroHoldTimeoutRef.current = setTimeout(() => {
       zeroHoldTimeoutRef.current = null;

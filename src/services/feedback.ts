@@ -3,68 +3,115 @@ import * as Haptics from "expo-haptics";
 
 import { GlobalSettings } from "../types/workout";
 
-const beepSource = require("../../assets/sounds/beep.wav");
+const soundSources = {
+  repTick: require("../../assets/sounds/rep-tick.wav"),
+  timerWarning: require("../../assets/sounds/timer-warning.wav"),
+  timerComplete: require("../../assets/sounds/timer-complete.wav"),
+};
 
-let beepPlayer: ReturnType<typeof createAudioPlayer> | null = null;
+type SoundName = keyof typeof soundSources;
 
-function getBeepPlayer() {
-  if (!beepPlayer) {
-    beepPlayer = createAudioPlayer(beepSource);
+const soundPlayers: Partial<
+  Record<SoundName, ReturnType<typeof createAudioPlayer>>
+> = {};
+
+function getSoundPlayer(soundName: SoundName) {
+  if (!soundPlayers[soundName]) {
+    soundPlayers[soundName] = createAudioPlayer(
+      soundSources[soundName]
+    );
   }
 
-  return beepPlayer;
+  return soundPlayers[soundName];
 }
 
-async function playBeep(settings: GlobalSettings) {
+async function playSound(
+  settings: GlobalSettings,
+  soundName: SoundName
+) {
   if (!settings.beepEnabled) {
     return;
   }
 
   try {
-    const player = getBeepPlayer();
+    const player = getSoundPlayer(soundName);
 
     await player.seekTo(0);
     player.play();
   } catch (error) {
-    console.log("Beep failed:", error);
+    console.log(`${soundName} sound failed:`, error);
   }
 }
 
-async function playVibration(settings: GlobalSettings) {
+async function playImpact(
+  settings: GlobalSettings,
+  style: Haptics.ImpactFeedbackStyle
+) {
   if (!settings.vibrationEnabled) {
     return;
   }
 
   try {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    await Haptics.impactAsync(style);
   } catch (error) {
     console.log("Haptic feedback failed:", error);
   }
 }
 
+async function playSuccessHaptic(settings: GlobalSettings) {
+  if (!settings.vibrationEnabled) {
+    return;
+  }
+
+  try {
+    await Haptics.notificationAsync(
+      Haptics.NotificationFeedbackType.Success
+    );
+  } catch (error) {
+    console.log("Finish haptic feedback failed:", error);
+  }
+}
+
+export async function playTimerWarningFeedback(
+  settings: GlobalSettings
+) {
+  await playImpact(
+    settings,
+    Haptics.ImpactFeedbackStyle.Light
+  );
+  await playSound(settings, "timerWarning");
+}
+
+export async function playTimerCompleteFeedback(
+  settings: GlobalSettings
+) {
+  await playImpact(
+    settings,
+    Haptics.ImpactFeedbackStyle.Heavy
+  );
+  await playSound(settings, "timerComplete");
+}
+
+/*
+ * Backward-compatible alias.
+ * Existing code that still calls playTimerFeedback will behave like
+ * a phase-complete feedback.
+ */
 export async function playTimerFeedback(settings: GlobalSettings) {
-  await playVibration(settings);
-  await playBeep(settings);
+  await playTimerCompleteFeedback(settings);
 }
 
 export async function playFinishFeedback(settings: GlobalSettings) {
-  if (settings.vibrationEnabled) {
-    try {
-      await Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Success
-      );
-    } catch (error) {
-      console.log("Finish haptic feedback failed:", error);
-    }
-  }
-
-  await playBeep(settings);
+  await playSuccessHaptic(settings);
+  await playSound(settings, "timerComplete");
 }
 
 export async function playRepTickFeedback(settings: GlobalSettings) {
-  await playBeep(settings);
+  await playSound(settings, "repTick");
 }
 
-export async function playTargetReachedFeedback(settings: GlobalSettings) {
-  await playTimerFeedback(settings);
+export async function playTargetReachedFeedback(
+  settings: GlobalSettings
+) {
+  await playTimerCompleteFeedback(settings);
 }
